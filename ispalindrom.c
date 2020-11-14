@@ -22,6 +22,7 @@ int main (int argc, char *argv[]){
     isPalindrom("abba");
     isPalindrom("lagerregal");
     isPalindrom("anna abba anna");
+    isPalindrom("Sanna abba annas");
     return 0;
 }
 
