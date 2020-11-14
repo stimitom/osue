@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 
 void isPalindrom(char str[])
 {
@@ -19,24 +20,46 @@ void isPalindrom(char str[])
     printf("%s is a palindrom.\n", str);
 }
 
-int main(int argc, char *argv[])
+void readFromSource(FILE *source)
 {
-    char *input = NULL;
+    char *line = NULL;
     size_t len = 0;
-    while (!feof(stdin))
+    ssize_t linesize;
+    while ((linesize = getline(&line, &len, source)) != -1)
     {
-        ssize_t linesize = getline(&input, &len, stdin);
-        if (input[linesize - 1] == '\n')
+        if (line[linesize - 1] == '\n')
         {
             // removes newline character from input string
-            input[linesize - 1] = '\0';
+            line[linesize - 1] = '\0';
             --linesize;
         }
 
-        isPalindrom(input);
+        isPalindrom(line);
     }
 
-    free(input);
+    free(line);
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc > 1)
+    {
+        for (size_t i = 1; i < argc; i++)
+        {
+            FILE *input = fopen(argv[i], "r");
+            if (input == NULL)
+            {
+                fprintf(stderr, "fopen failed: %s \n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+            readFromSource(input);
+            /* code */
+        }
+    }
+    else
+    {
+        readFromSource(stdin);
+    }
 
     return 0;
 }
