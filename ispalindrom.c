@@ -2,22 +2,89 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
+#include <ctype.h>
+
+char *outfile = NULL;
+int writeToFile;
+int removeWhiteSpaces;
+int caseInsensitive;
+
+void removeSpaces(char *str)
+{
+    // To keep track of non-space character count
+    int count = 0;
+
+    // Traverse the given string. If current character
+    // is not space, then place it at index 'count++'
+    for (int i = 0; str[i]; i++)
+    {
+        if (str[i] != ' ')
+        {
+            str[count++] = str[i];
+        }
+    }
+    str[count] = '\0';
+}
+
+void allToLower(char *str)
+{
+    for (int i = 0; i < strlen(str); i++)
+    {
+        str[i] = tolower(str[i]);
+    }
+}
 
 void isPalindrom(char str[])
 {
+    char initial[strlen(str)];
+    strcpy(initial, str);
+
+    if (removeWhiteSpaces)
+    {
+        removeSpaces(str);
+    }
+
+    if (caseInsensitive)
+    {
+        allToLower(str);
+    }
+
     int l = 0;
     int h = strlen(str) - 1;
 
-    while (h > l)
+    if (writeToFile)
     {
-        if (str[l++] != str[h--])
+        FILE *output = fopen(outfile, "a");
+        if (output == NULL)
         {
-            /* Compares characters from beginning and end to the middle. Returns if they are not equal.*/
-            printf("%s is not a palindrom.\n", str);
             return;
         }
+        while (h > l)
+        {
+            if (str[l++] != str[h--])
+            {
+                /* Compares characters from beginning and end to the middle. Returns if they are not equal.*/
+                strcat(initial, " is not a palindrom.\n");
+                fputs(initial, output);
+                return;
+            }
+        }
+        strcat(initial, " is a palindrom.\n");
+        fputs(initial, output);
     }
-    printf("%s is a palindrom.\n", str);
+    else
+    {
+        while (h > l)
+        {
+            if (str[l++] != str[h--])
+            {
+                printf("%s is not a palindrom.\n", initial);
+                return;
+            }
+        }
+        printf("%s is a palindrom.\n", initial);
+    }
 }
 
 void readFromSource(FILE *source)
@@ -42,9 +109,33 @@ void readFromSource(FILE *source)
 
 int main(int argc, char *argv[])
 {
-    if (argc > 1)
+    int opt_num = 0;
+    int c;
+    while ((c = getopt(argc, argv, "iso:")) != -1)
     {
-        for (size_t i = 1; i < argc; i++)
+        switch (c)
+        {
+        case 'i':
+            caseInsensitive = 1;
+            opt_num++;
+            break;
+        case 's':
+            removeWhiteSpaces = 1;
+            opt_num++;
+            break;
+        case 'o':
+            writeToFile = 1;
+            outfile = optarg;
+            opt_num += 2;
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (argc - 1 > opt_num)
+    {
+        for (size_t i = opt_num + 1; i < argc; i++)
         {
             FILE *input = fopen(argv[i], "r");
             if (input == NULL)
@@ -53,7 +144,6 @@ int main(int argc, char *argv[])
                 exit(EXIT_FAILURE);
             }
             readFromSource(input);
-            /* code */
         }
     }
     else
