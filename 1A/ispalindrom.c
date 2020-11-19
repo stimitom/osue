@@ -3,9 +3,9 @@
  * @author Thomas Stimakovits <0155190@student.tuwien.ac.at>
  * @date 18.11.2020
  *
- * @brief Main program module.
+ * @brief Main program module for ispalindrom.
  * 
- * This program takes an input from either stdin or a file, checks if it is a palindrom 
+ * @details This program takes an input from either stdin or a file, checks if it is a palindrom 
  * and prints the answer to a file or stdout.
  * 
  **/
@@ -31,6 +31,8 @@ int caseInsensitive;
  *  If the current character is not space, it places the charcater at the strings index 'count' 
  *  and then increases the count. That way the spaces get overjumped.
  *  The last character is set to the null-character at the end.
+ * @param str - a string (character pointer) to a string to remove spaces from
+ * @return void
  */
 static void removeSpaces(char *str)
 {
@@ -50,6 +52,8 @@ static void removeSpaces(char *str)
  *  allToLower function. Help function.
  * @brief This function takes a string as input and returns the same string with only lowercase letters.
  * @details uses the tolower-method on each character and returns the whole string.
+ * @param str - a string (character pointer) to a string of which all character should be set to lowercase letters.
+ * @return void
  */
 static void allToLower(char *str)
 {
@@ -68,6 +72,8 @@ static void allToLower(char *str)
  *  If the writeToFile flag is set the output will not be printed to stdout but written to a given file.
  *  The algorithm for checking if something is apalindrom works by comparing the input's characters from beginning 
  *  and end to the middle. It returns the negative message if one pair is not equal and the positive message otherwise.
+ * @param str - a string (character pointer) to be checked for if it is a palindrom
+ * @return void
  */
 static void isPalindrom(char str[])
 {
@@ -134,6 +140,8 @@ static void isPalindrom(char str[])
  * @brief This function reads line by line from an input source and calls isPalindrom with the line.
  * @details Getline manages the Buffering for the read line. While there are still lines left in the
  * input isPalindrom() is called with the line. After the usage the allocated memory space is freed. 
+ * @param source - an input source (File or StdIn) to be read.
+ * @return void
  */
 static void readFromSource(FILE *source)
 {
