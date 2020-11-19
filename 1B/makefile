@@ -1,6 +1,19 @@
+# @file makefile
+# @author Thomas Stimakovits <0155190@student.tuwien.ac.at>
+# 
+
 CC = gcc
-DEFS = -D_BSD_SOURCE -D_SVID_SOURCE -D_POSIX_C_SOURCE=200809L 
+DEFS = -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_SVID_SOURCE -D_POSIX_C_SOURCE=200809L 
 CFLAGS = -std=c99 -pedantic -Wall $(DEFS) -g -c
 
 .PHONY: all clean 
-all: 
+all: generator
+
+generator: generator.o 
+	$(CC) -o $@ $<
+
+generator.o : generator.c
+	$(CC) -o $@ $(CFLAGS)  $<
+
+clean: 
+	rm -rf *.o generator
