@@ -3,28 +3,9 @@
 #include <limits.h>
 #include <errno.h>
 #include <string.h>
+#include "generator.h"
 
 static char *pgm_name;
-
-enum colour
-{
-    EMTPY,
-    RED,
-    GREEN,
-    BLUE
-};
-
-typedef struct vert
-{
-    long int id;
-    enum colour colour;
-} vertex;
-
-typedef struct edg
-{
-    vertex v1;
-    vertex v2;
-} edge;
 
 static void setRandomVertexColour(vertex *v)
 {
@@ -39,8 +20,6 @@ static void assignGraphColouring(vertex *vertices, int numberOfVertices)
         setRandomVertexColour(&vertices[m]);
     }
 }
-
-
 
 static void printEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *edges, long numberOfEdges)
 {

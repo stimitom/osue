@@ -12,7 +12,7 @@ all: generator
 generator: generator.o 
 	$(CC) -o $@ $<
 
-generator.o : generator.c
+generator.o : generator.c generator.h
 	$(CC) -o $@ $(CFLAGS)  $<
 
 clean: 
