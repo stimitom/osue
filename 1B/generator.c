@@ -4,8 +4,64 @@
 #include <errno.h>
 #include <string.h>
 #include "generator.h"
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <semaphore.h>
 
 static char *pgm_name;
+solution *cBuff;
+sem_t *used_sem;
+sem_t *free_sem;
+
+int wr_pos = 0;
+static void write(solution val)
+{
+    if ((sem_wait(free_sem) == -1))
+    {
+        fprintf(stderr, "%s: free_sem semaphore could not be decremented: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    cBuff[wr_pos] = val;
+    if ((sem_post(used_sem)) == -1)
+    {
+        fprintf(stderr, "%s: used_sem semaphore could not be incremented: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    wr_pos += 1;
+    wr_pos %= MAX_BUFF_SIZE;
+}
+
+static void setSemaphores()
+{
+    if ((used_sem = sem_open(SEM_1, 0)) == SEM_FAILED)
+    {
+        fprintf(stderr, "%s: used_sem semaphore could not be initialized: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    if ((free_sem = sem_open(SEM_2, 0)) == SEM_FAILED)
+    {
+        fprintf(stderr, "%s: free_sem semaphore could not be initialized: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void setSharedMemory(void)
+{
+    int shmfd;
+    if ((shmfd = shm_open(SHM_NAME, O_RDWR, 0600)) == -1)
+    {
+        fprintf(stderr, "%s: shared memory could not be opened: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    if ((cBuff = mmap(NULL, sizeof(solution[MAX_BUFF_SIZE]), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0)) == MAP_FAILED)
+    {
+        fprintf(stderr, "%s: shared memory could not be mapped: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+}
 
 static void setRandomVertexColour(vertex *v)
 {
@@ -21,13 +77,14 @@ static void assignGraphColouring(vertex *vertices, int numberOfVertices)
     }
 }
 
-static void printEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *edges, long numberOfEdges)
+static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *edges, long numberOfEdges, int maxSolutionSize)
 {
-    edge removeEdgesMax[sizeof(edges[0])*8];
-    int numberOfEdgesToBeRemoved = 9;
-    while (numberOfEdgesToBeRemoved > 8)
+    printf("max sol size %d \n", maxSolutionSize);
+    edge removeEdgesMax[sizeof(edges[0]) * 8];
+    int numberOfEdgesToBeRemoved = maxSolutionSize +1;
+    while (numberOfEdgesToBeRemoved > maxSolutionSize)
     {
-        assignGraphColouring(vertices,numberOfVertices);
+        assignGraphColouring(vertices, numberOfVertices);
         numberOfEdgesToBeRemoved = 0;
 
         for (long i = 0; i < numberOfEdges; i++)
@@ -55,13 +112,21 @@ static void printEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *
             }
         }
     }
-    edge removeEdges[numberOfEdgesToBeRemoved];
+    edge removeEdges[8];
     for (int i = 0; i < numberOfEdgesToBeRemoved; i++)
     {
         removeEdges[i] = removeEdgesMax[i];
         printf("Edge: %ld-%ld needs to be removed\n", removeEdges[i].v1.id, removeEdges[i].v2.id);
     }
-     
+
+    solution s = {{removeEdges[0], removeEdges[1], removeEdges[2], removeEdges[3], removeEdges[4], removeEdges[5], removeEdges[6], removeEdges[7]}, numberOfEdgesToBeRemoved};
+    write(s);
+    if (numberOfEdgesToBeRemoved == 0)
+    {
+        printf("Found Graph Colouring.\n");
+    }
+    
+
 }
 
 int main(int argc, char *argv[])
@@ -74,7 +139,7 @@ int main(int argc, char *argv[])
         vertices = malloc(sizeof(vertex) * ((argc - 1) * 2));
         if (vertices == NULL)
         {
-            fprintf(stderr, "malloc for vertices failed.");
+            fprintf(stderr, "malloc for vertices failed.\n");
             exit(EXIT_FAILURE);
         }
         int numberOfVertices = 0;
@@ -114,7 +179,7 @@ int main(int argc, char *argv[])
 
             if (endptr2 != NULL)
             {
-                if (endptr2 == (endptr+1) || endptr2[0] != '\0')
+                if (endptr2 == (endptr + 1) || endptr2[0] != '\0')
                 {
                     fprintf(stderr, "%s: input could not be parsed. At least one edge is malformed after the '-' sign.\n", pgm_name);
                     exit(EXIT_FAILURE);
@@ -167,12 +232,18 @@ int main(int argc, char *argv[])
         //Set vertices to exact size
         if (realloc(vertices, sizeof(vertex) * numberOfVertices) == NULL)
         {
-            fprintf(stderr, "realloc for vertices failed.");
+            fprintf(stderr, "realloc for vertices failed.\n");
             exit(EXIT_FAILURE);
         }
 
+        setSharedMemory();
+        setSemaphores();
 
-        printEdgesToBeRemoved(vertices, numberOfVertices, edges, (sizeof(edges) / sizeof(edges[0])));
+        int maxSolutionSize = 8;
+        while (maxSolutionSize >= 0)
+        {
+           findEdgesToBeRemoved(vertices, numberOfVertices, edges, (sizeof(edges) / sizeof(edges[0])), maxSolutionSize--);
+        }
 
         //Cleanup
         free(vertices);

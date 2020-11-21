@@ -19,5 +19,12 @@ typedef struct edg
 } edge;
 
 typedef struct sol {
-    edge *edges;
+    edge edges[8];
+    int solutionSize;
 } solution;
+
+
+#define SHM_NAME "/genshm"
+#define MAX_BUFF_SIZE 10
+#define SEM_1 "/sem_1"
+#define SEM_2 "/sem_2"
