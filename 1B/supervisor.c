@@ -9,7 +9,7 @@
 #include "generator.h"
 #include <string.h>
 #include <unistd.h>
-
+#include <signal.h>
 
 static char *pgm_name;
 
@@ -17,8 +17,9 @@ circBuff *cBuff;
 sem_t *used_sem;
 sem_t *free_sem;
 sem_t *mutex_sem;
-int shmfd;
 
+int shmfd;
+volatile sig_atomic_t quit = 0;
 int rd_pos = 0;
 int currentBestSolutionSize = 9;
 static int readFromBuffer(void)
@@ -26,6 +27,14 @@ static int readFromBuffer(void)
 
     if ((sem_wait(used_sem) == -1))
     {
+        if (errno == EINTR)
+        {
+            if (quit)
+            {
+                exit(EXIT_SUCCESS);
+            }
+        }
+
         fprintf(stderr, "%s: used_sem semaphore could not be decremented: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
@@ -53,6 +62,8 @@ static int readFromBuffer(void)
     }
     else
     {
+        //Terminates all generators
+        cBuff->writePosition = -99;
         printf("Graph Colouring found.\n");
     }
 
@@ -124,26 +135,55 @@ static void cleanUp(void)
 
     sem_close(free_sem);
     sem_close(used_sem);
-    sem_close(mutex_sem); 
-    sem_unlink(SEM_1); 
+    sem_close(mutex_sem);
+    sem_unlink(SEM_1);
     sem_unlink(SEM_2);
     sem_unlink(SEM_3);
+}
+
+static void terminate(void)
+{
+    cBuff->writePosition = -99;
+    cleanUp();
+}
+
+static void handle_signal(int signal)
+{
+    quit = 1;
+}
+
+static void setSignalHandling(void)
+{
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_signal;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
 }
 
 int main(int argc, char *argv[])
 {
     pgm_name = argv[0];
 
-    setUpSharedMemory();
-
-    initializeSemaphores();
-
-    int lookingForSolution = 1;
-    while (lookingForSolution)
+    if (atexit(terminate) < 0)
     {
-        lookingForSolution = readFromBuffer();
+        fprintf(stderr, "%s: Could not set exit function.", pgm_name);
+        exit(EXIT_FAILURE);
+    }
+    setSignalHandling();
+
+    while (!quit)
+    {
+        setUpSharedMemory();
+
+        initializeSemaphores();
+
+        int lookingForSolution = 1;
+        while (lookingForSolution)
+        {
+            lookingForSolution = readFromBuffer();
+        }
     }
 
-    cleanUp();
     return 0;
 }

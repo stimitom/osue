@@ -9,43 +9,12 @@
 #include <semaphore.h>
 #include <unistd.h>
 
-
 static char *pgm_name;
 int shmfd;
 circBuff *cBuff;
 sem_t *used_sem;
 sem_t *free_sem;
 sem_t *mutex_sem;
-
-static void writeToBuffer(solution val)
-{
-    if (sem_wait(mutex_sem) == -1)
-    {
-        fprintf(stderr, "%s: mutex_sem semaphore could not be decremented: %s\n", pgm_name, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    if ((sem_wait(free_sem) == -1))
-    {
-        fprintf(stderr, "%s: free_sem semaphore could not be decremented: %s\n", pgm_name, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    cBuff->array[cBuff->writePosition] = val;
-    if ((sem_post(used_sem)) == -1)
-    {
-        fprintf(stderr, "%s: used_sem semaphore could not be incremented: %s\n", pgm_name, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    cBuff->writePosition += 1;
-    cBuff->writePosition %= MAX_BUFF_SIZE;
-
-    if (sem_post(mutex_sem) == -1)
-    {
-        fprintf(stderr, "%s: mutex_sem semaphore could not be incremented: %s\n", pgm_name, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-}
 
 static void setSemaphores()
 {
@@ -70,7 +39,7 @@ static void setSemaphores()
 
 static void setSharedMemory(void)
 {
-    
+
     if ((shmfd = shm_open(SHM_NAME, O_RDWR, 0600)) == -1)
     {
         fprintf(stderr, "%s: shared memory could not be opened: %s\n", pgm_name, strerror(errno));
@@ -120,7 +89,42 @@ static void cleanUp(void)
 
     sem_close(free_sem);
     sem_close(used_sem);
-    sem_close(mutex_sem); 
+    sem_close(mutex_sem);
+}
+
+static void writeToBuffer(solution val)
+{
+    if ((cBuff->writePosition) < 0)
+    {
+        exit(EXIT_SUCCESS);
+    }
+
+    if (sem_wait(mutex_sem) == -1)
+    {
+        fprintf(stderr, "%s: mutex_sem semaphore could not be decremented: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    if ((sem_wait(free_sem) == -1))
+    {
+        fprintf(stderr, "%s: free_sem semaphore could not be decremented: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    cBuff->array[cBuff->writePosition] = val;
+    if ((sem_post(used_sem)) == -1)
+    {
+        fprintf(stderr, "%s: used_sem semaphore could not be incremented: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    cBuff->writePosition += 1;
+    cBuff->writePosition %= MAX_BUFF_SIZE;
+
+    if (sem_post(mutex_sem) == -1)
+    {
+        fprintf(stderr, "%s: mutex_sem semaphore could not be incremented: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
 }
 
 static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *edges, long numberOfEdges, int maxSolutionSize)
@@ -173,12 +177,26 @@ static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *e
     }
 }
 
+static void terminate(void)
+{
+    cleanUp();
+    free(vertices);
+}
+
+vertex *vertices;
 int main(int argc, char *argv[])
 {
     pgm_name = argv[0];
+
+    if (atexit(terminate) < 0)
+    {
+        fprintf(stderr, "%s: Could not set exit function.", pgm_name);
+        exit(EXIT_FAILURE);
+    }
+
     if (argc > 1)
     {
-        vertex *vertices;
+
         //Set vertices array to maximum possible size
         vertices = malloc(sizeof(vertex) * ((argc - 1) * 2));
         if (vertices == NULL)
@@ -289,9 +307,7 @@ int main(int argc, char *argv[])
             findEdgesToBeRemoved(vertices, numberOfVertices, edges, (sizeof(edges) / sizeof(edges[0])), maxSolutionSize--);
         }
 
-        //Cleanup
-        cleanUp();
-        free(vertices);
+        terminate();
     }
     else
     {
