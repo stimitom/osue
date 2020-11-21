@@ -7,29 +7,44 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <semaphore.h>
+#include <unistd.h>
+
 
 static char *pgm_name;
-solution *cBuff;
+int shmfd;
+circBuff *cBuff;
 sem_t *used_sem;
 sem_t *free_sem;
+sem_t *mutex_sem;
 
-int wr_pos = 0;
-static void write(solution val)
+static void writeToBuffer(solution val)
 {
+    if (sem_wait(mutex_sem) == -1)
+    {
+        fprintf(stderr, "%s: mutex_sem semaphore could not be decremented: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
     if ((sem_wait(free_sem) == -1))
     {
         fprintf(stderr, "%s: free_sem semaphore could not be decremented: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
-    cBuff[wr_pos] = val;
+    cBuff->array[cBuff->writePosition] = val;
     if ((sem_post(used_sem)) == -1)
     {
         fprintf(stderr, "%s: used_sem semaphore could not be incremented: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    wr_pos += 1;
-    wr_pos %= MAX_BUFF_SIZE;
+    cBuff->writePosition += 1;
+    cBuff->writePosition %= MAX_BUFF_SIZE;
+
+    if (sem_post(mutex_sem) == -1)
+    {
+        fprintf(stderr, "%s: mutex_sem semaphore could not be incremented: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
 }
 
 static void setSemaphores()
@@ -45,18 +60,24 @@ static void setSemaphores()
         fprintf(stderr, "%s: free_sem semaphore could not be initialized: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
+
+    if ((mutex_sem = sem_open(SEM_3, 0)) == SEM_FAILED)
+    {
+        fprintf(stderr, "%s: mutex_sem semaphore could not be initialized: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
 }
 
 static void setSharedMemory(void)
 {
-    int shmfd;
+    
     if ((shmfd = shm_open(SHM_NAME, O_RDWR, 0600)) == -1)
     {
         fprintf(stderr, "%s: shared memory could not be opened: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    if ((cBuff = mmap(NULL, sizeof(solution[MAX_BUFF_SIZE]), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0)) == MAP_FAILED)
+    if ((cBuff = mmap(NULL, sizeof(cBuff), PROT_READ | PROT_WRITE, MAP_SHARED, shmfd, 0)) == MAP_FAILED)
     {
         fprintf(stderr, "%s: shared memory could not be mapped: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
@@ -77,11 +98,36 @@ static void assignGraphColouring(vertex *vertices, int numberOfVertices)
     }
 }
 
+static void cleanUp(void)
+{
+
+    if (munmap(cBuff, sizeof(cBuff)) == -1)
+    {
+        fprintf(stderr, "%s: shared memory file descriptor could not be unmapped: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    if (shm_unlink(SHM_NAME) == -1)
+    {
+        fprintf(stderr, "%s: shared memory file descriptor could not be unlinked: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    if (close(shmfd) == -1)
+    {
+        fprintf(stderr, "%s: shared memory file descriptor could not be closed: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    sem_close(free_sem);
+    sem_close(used_sem);
+    sem_close(mutex_sem); 
+}
+
 static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *edges, long numberOfEdges, int maxSolutionSize)
 {
     printf("max sol size %d \n", maxSolutionSize);
     edge removeEdgesMax[sizeof(edges[0]) * 8];
-    int numberOfEdgesToBeRemoved = maxSolutionSize +1;
+    int numberOfEdgesToBeRemoved = maxSolutionSize + 1;
     while (numberOfEdgesToBeRemoved > maxSolutionSize)
     {
         assignGraphColouring(vertices, numberOfVertices);
@@ -120,13 +166,11 @@ static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *e
     }
 
     solution s = {{removeEdges[0], removeEdges[1], removeEdges[2], removeEdges[3], removeEdges[4], removeEdges[5], removeEdges[6], removeEdges[7]}, numberOfEdgesToBeRemoved};
-    write(s);
+    writeToBuffer(s);
     if (numberOfEdgesToBeRemoved == 0)
     {
         printf("Found Graph Colouring.\n");
     }
-    
-
 }
 
 int main(int argc, char *argv[])
@@ -242,10 +286,11 @@ int main(int argc, char *argv[])
         int maxSolutionSize = 8;
         while (maxSolutionSize >= 0)
         {
-           findEdgesToBeRemoved(vertices, numberOfVertices, edges, (sizeof(edges) / sizeof(edges[0])), maxSolutionSize--);
+            findEdgesToBeRemoved(vertices, numberOfVertices, edges, (sizeof(edges) / sizeof(edges[0])), maxSolutionSize--);
         }
 
         //Cleanup
+        cleanUp();
         free(vertices);
     }
     else

@@ -1,3 +1,9 @@
+#define SHM_NAME "/genshm"
+#define MAX_BUFF_SIZE 10
+#define SEM_1 "/sem_1"
+#define SEM_2 "/sem_2"
+#define SEM_3 "/sem_3"
+
 enum colour
 {
     EMTPY,
@@ -23,8 +29,10 @@ typedef struct sol {
     int solutionSize;
 } solution;
 
+typedef struct buff {
+    solution array[MAX_BUFF_SIZE]; 
+    int writePosition; 
+} circBuff;
 
-#define SHM_NAME "/genshm"
-#define MAX_BUFF_SIZE 10
-#define SEM_1 "/sem_1"
-#define SEM_2 "/sem_2"
+
+
