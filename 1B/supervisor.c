@@ -17,6 +17,7 @@ circBuff *cBuff;
 sem_t *used_sem;
 sem_t *free_sem;
 sem_t *mutex_sem;
+sem_t *generator_count_sem;
 
 int shmfd;
 volatile sig_atomic_t quit = 0;
@@ -63,7 +64,7 @@ static int readFromBuffer(void)
     else
     {
         //Terminates all generators
-        cBuff->writePosition = -99;
+        cBuff->terminate = 1;
         printf("Graph Colouring found.\n");
     }
 
@@ -87,6 +88,12 @@ static void initializeSemaphores(void)
     if ((mutex_sem = sem_open(SEM_3, O_CREAT | O_EXCL, 0600, 1)) == SEM_FAILED)
     {
         fprintf(stderr, "%s: mutex_sem semaphore could not be initialized: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    if ((generator_count_sem = sem_open(SEM_4, O_CREAT | O_EXCL, 0600, 0)) == SEM_FAILED)
+    {
+        fprintf(stderr, "%s: generator_count_sem semaphore could not be initialized: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
 }
@@ -136,14 +143,26 @@ static void cleanUp(void)
     sem_close(free_sem);
     sem_close(used_sem);
     sem_close(mutex_sem);
+    sem_close(generator_count_sem);
     sem_unlink(SEM_1);
     sem_unlink(SEM_2);
     sem_unlink(SEM_3);
+    sem_unlink(SEM_4);
 }
 
 static void terminate(void)
 {
-    cBuff->writePosition = -99;
+    int numberOfGenerators;
+    if(sem_getvalue(generator_count_sem, &numberOfGenerators) == -1){
+        fprintf(stderr, "%s: could not read generator_count_sem semaphore value: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    for ( int i = 0; i < numberOfGenerators; i++)
+    {
+        sem_post(free_sem);
+    }
+    cBuff->terminate = 1;
+    printf("terminate flag %d\n", cBuff->terminate);
     cleanUp();
 }
 

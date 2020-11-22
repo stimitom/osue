@@ -15,6 +15,8 @@ circBuff *cBuff;
 sem_t *used_sem;
 sem_t *free_sem;
 sem_t *mutex_sem;
+sem_t *generator_count_sem;
+int countedThisGenerator = 0;
 
 static void setSemaphores()
 {
@@ -33,6 +35,12 @@ static void setSemaphores()
     if ((mutex_sem = sem_open(SEM_3, 0)) == SEM_FAILED)
     {
         fprintf(stderr, "%s: mutex_sem semaphore could not be initialized: %s\n", pgm_name, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    if ((generator_count_sem = sem_open(SEM_4, 0)) == SEM_FAILED)
+    {
+        fprintf(stderr, "%s: generator_count_sem semaphore could not be initialized: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
 }
@@ -75,11 +83,6 @@ static void cleanUp(void)
         fprintf(stderr, "%s: shared memory file descriptor could not be unmapped: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
-    if (shm_unlink(SHM_NAME) == -1)
-    {
-        fprintf(stderr, "%s: shared memory file descriptor could not be unlinked: %s\n", pgm_name, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
 
     if (close(shmfd) == -1)
     {
@@ -90,13 +93,25 @@ static void cleanUp(void)
     sem_close(free_sem);
     sem_close(used_sem);
     sem_close(mutex_sem);
+    sem_close(generator_count_sem);
 }
 
 static void writeToBuffer(solution val)
 {
-    if ((cBuff->writePosition) < 0)
+    printf("terminate flag %d", cBuff->terminate);
+    if (cBuff->terminate)
     {
+        printf("exited\n");
         exit(EXIT_SUCCESS);
+    }
+    if (!countedThisGenerator)
+    {
+        if ((sem_post(generator_count_sem)) == -1)
+        {
+            fprintf(stderr, "%s: generator_count_sem semaphore could not be incremented: %s\n", pgm_name, strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        countedThisGenerator++;
     }
 
     if (sem_wait(mutex_sem) == -1)
@@ -134,6 +149,11 @@ static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *e
     int numberOfEdgesToBeRemoved = maxSolutionSize + 1;
     while (numberOfEdgesToBeRemoved > maxSolutionSize)
     {
+        if (cBuff->terminate)
+        {
+            printf("exited\n");
+            exit(EXIT_SUCCESS);
+        }
         assignGraphColouring(vertices, numberOfVertices);
         numberOfEdgesToBeRemoved = 0;
 
@@ -177,26 +197,19 @@ static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *e
     }
 }
 
-static void terminate(void)
-{
-    cleanUp();
-    free(vertices);
-}
-
-vertex *vertices;
 int main(int argc, char *argv[])
 {
     pgm_name = argv[0];
 
-    if (atexit(terminate) < 0)
+    if (atexit(cleanUp) < 0)
     {
-        fprintf(stderr, "%s: Could not set exit function.", pgm_name);
+        fprintf(stderr, "%s: Could not set exit function.\n", pgm_name);
         exit(EXIT_FAILURE);
     }
 
     if (argc > 1)
     {
-
+        vertex *vertices;
         //Set vertices array to maximum possible size
         vertices = malloc(sizeof(vertex) * ((argc - 1) * 2));
         if (vertices == NULL)
@@ -307,7 +320,8 @@ int main(int argc, char *argv[])
             findEdgesToBeRemoved(vertices, numberOfVertices, edges, (sizeof(edges) / sizeof(edges[0])), maxSolutionSize--);
         }
 
-        terminate();
+        cleanUp();
+        free(vertices);
     }
     else
     {
