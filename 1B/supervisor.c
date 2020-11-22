@@ -77,12 +77,12 @@ static int readFromBuffer(void)
         if (val.solutionSize < currentBestSolutionSize)
         {
             currentBestSolutionSize = val.solutionSize;
-            printf("Solution with size %d:\n", currentBestSolutionSize);
+            printf("Solution with %d edges:", currentBestSolutionSize);
             for (int i = 0; i < val.solutionSize; i++)
             {
-                printf("Edge %ld-%ld needs to be removed.\n", val.edges[i].v1.id, val.edges[i].v2.id);
+                printf(" %ld-%ld", val.edges[i].v1.id, val.edges[i].v2.id);
             }
-            printf("Searching for a better solution....\n");
+            printf("\n");
         }
     }
     else
@@ -212,7 +212,7 @@ static void terminate(void)
         fprintf(stderr, "%s: could not read generator_count_sem semaphore value: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
-    for (int i = 0; i < numberOfGenerators; i++)
+    for (int i = 0; i <numberOfGenerators; i++)
     {
         sem_post(mutex_sem);
         sem_post(free_sem);

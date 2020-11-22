@@ -126,7 +126,7 @@ static void assignGraphColouring(vertex *vertices, int numberOfVertices)
  */
 static void cleanUp(void)
 {
-    printf("Exit mehthod called.\n");
+    
     if (munmap(cBuff, sizeof(cBuff)) == -1)
     {
         fprintf(stderr, "%s: shared memory file descriptor could not be unmapped: %s\n", pgm_name, strerror(errno));
@@ -145,6 +145,7 @@ static void cleanUp(void)
     sem_close(generator_count_sem);
 
     free(vertices);
+    printf("Exited.\n");
 }
 
 /**
@@ -163,7 +164,6 @@ static void writeToBuffer(solution val)
 {
     if (cBuff->terminate)
     {
-        printf("exited\n");
         exit(EXIT_SUCCESS);
     }
     if (!countedThisGenerator)
@@ -228,7 +228,6 @@ static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *e
     {
         if (cBuff->terminate)
         {
-            printf("exited\n");
             exit(EXIT_SUCCESS);
         }
         assignGraphColouring(vertices, numberOfVertices);
