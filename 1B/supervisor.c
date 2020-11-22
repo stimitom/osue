@@ -159,10 +159,10 @@ static void terminate(void)
     }
     for ( int i = 0; i < numberOfGenerators; i++)
     {
+        sem_post(mutex_sem);
         sem_post(free_sem);
     }
     cBuff->terminate = 1;
-    printf("terminate flag %d\n", cBuff->terminate);
     cleanUp();
 }
 

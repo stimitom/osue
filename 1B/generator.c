@@ -17,6 +17,7 @@ sem_t *free_sem;
 sem_t *mutex_sem;
 sem_t *generator_count_sem;
 int countedThisGenerator = 0;
+vertex *vertices;
 
 static void setSemaphores()
 {
@@ -77,7 +78,7 @@ static void assignGraphColouring(vertex *vertices, int numberOfVertices)
 
 static void cleanUp(void)
 {
-
+    printf("Exit mehthod called.\n");
     if (munmap(cBuff, sizeof(cBuff)) == -1)
     {
         fprintf(stderr, "%s: shared memory file descriptor could not be unmapped: %s\n", pgm_name, strerror(errno));
@@ -94,11 +95,12 @@ static void cleanUp(void)
     sem_close(used_sem);
     sem_close(mutex_sem);
     sem_close(generator_count_sem);
+
+    free(vertices);
 }
 
 static void writeToBuffer(solution val)
 {
-    printf("terminate flag %d", cBuff->terminate);
     if (cBuff->terminate)
     {
         printf("exited\n");
@@ -186,15 +188,10 @@ static void findEdgesToBeRemoved(vertex *vertices, int numberOfVertices, edge *e
     for (int i = 0; i < numberOfEdgesToBeRemoved; i++)
     {
         removeEdges[i] = removeEdgesMax[i];
-        printf("Edge: %ld-%ld needs to be removed\n", removeEdges[i].v1.id, removeEdges[i].v2.id);
     }
 
     solution s = {{removeEdges[0], removeEdges[1], removeEdges[2], removeEdges[3], removeEdges[4], removeEdges[5], removeEdges[6], removeEdges[7]}, numberOfEdgesToBeRemoved};
     writeToBuffer(s);
-    if (numberOfEdgesToBeRemoved == 0)
-    {
-        printf("Found Graph Colouring.\n");
-    }
 }
 
 int main(int argc, char *argv[])
@@ -209,7 +206,7 @@ int main(int argc, char *argv[])
 
     if (argc > 1)
     {
-        vertex *vertices;
+        
         //Set vertices array to maximum possible size
         vertices = malloc(sizeof(vertex) * ((argc - 1) * 2));
         if (vertices == NULL)
