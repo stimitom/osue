@@ -212,7 +212,7 @@ static void terminate(void)
         fprintf(stderr, "%s: could not read generator_count_sem semaphore value: %s\n", pgm_name, strerror(errno));
         exit(EXIT_FAILURE);
     }
-    for (int i = 0; i <numberOfGenerators; i++)
+    for (int i = 0; i < numberOfGenerators; i++)
     {
         sem_post(mutex_sem);
         sem_post(free_sem);
@@ -266,12 +266,12 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
     setSignalHandling();
+    setUpSharedMemory();
+
+    initializeSemaphores();
 
     while (!quit)
     {
-        setUpSharedMemory();
-
-        initializeSemaphores();
 
         int lookingForSolution = 1;
         while (lookingForSolution)
