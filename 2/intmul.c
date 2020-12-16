@@ -32,6 +32,7 @@ static void redirectInAndOut(void);
 static void closeAllPipesExcept(int readPipeNumber, int writePipeNumber);
 static void writeToPipes(void);
 static void waitForChildren(void);
+static void executeChildProcess(void);
 
 int main(int argc, char *argv[])
 {
@@ -56,15 +57,26 @@ int main(int argc, char *argv[])
 
     if (pids[0] && pids[1] && pids[2] && pids[3])
     {
-        //Only here in parent
+        //Parent
         closeUnneccasaryPipeEndsParent();
         writeToPipes();
         waitForChildren();
     }
+    else
+    {
+        // Child
+        executeChildProcess();
+    }
+}
+static void executeChildProcess(void){
+    if (execlp(pgmName, pgmName, (char *)NULL) == -1)
+    {
+        exitError("The child programm could not be executed.", errno);
+    }
 }
 
 static void waitForChildren(void)
-{   
+{
     int statuses[4];
     if (waitpid(pids[0], &statuses[0], 0) == -1)
     {
@@ -107,11 +119,11 @@ static void waitForChildren(void)
 static void writeToPipes(void)
 {
     //Highest
-    if (dprintf(pipefds[0][1], Ah) <=  0)
+    if (dprintf(pipefds[0][1],"%s\n", Ah) <= 0)
     {
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[0][1], Bh) <=  0)
+    if (dprintf(pipefds[0][1], "%s",Bh) <= 0)
     {
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
@@ -121,11 +133,11 @@ static void writeToPipes(void)
     }
 
     // Highlow
-    if (dprintf(pipefds[2][1], Ah) <=  0)
+    if (dprintf(pipefds[2][1],"%s\n", Ah) <= 0)
     {
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[2][1], Bl) <=  0)
+    if (dprintf(pipefds[2][1],"%s", Bl) <= 0)
     {
         exitError("Could not write Bl to readPipe in Parent.", 0);
     }
@@ -135,11 +147,11 @@ static void writeToPipes(void)
     }
 
     // LowHigh
-    if (dprintf(pipefds[4][1], Al) <=  0)
+    if (dprintf(pipefds[4][1],"%s\n", Al) <= 0)
     {
         exitError("Could not write Al to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[4][1], Bh) <=  0)
+    if (dprintf(pipefds[4][1],"%s", Bh) <= 0)
     {
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
@@ -149,11 +161,11 @@ static void writeToPipes(void)
     }
 
     // Lowest
-    if (dprintf(pipefds[6][1], Al) <=  0)
+    if (dprintf(pipefds[6][1],"%s\n", Al) <= 0)
     {
         exitError("Could not write Al to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[6][1], Bl) <=  0)
+    if (dprintf(pipefds[6][1],"%s", Bl) <= 0)
     {
         exitError("Could not write Bl to readPipe in Parent.", 0);
     }
@@ -244,11 +256,17 @@ static void redirectInAndOut(void)
         }
 
         closeAllPipesExcept(6, 7);
-    }else{
-        //parent 
+    }
+    else
+    {
+        //parent
         return;
     }
-    execlp
+
+    // if (execlp(pgmName, pgmName, (char *)NULL) == -1)
+    // {
+    //     exitError("The child programm could not be executed.", errno);
+    // }
 }
 
 static void createPipes(void)
@@ -403,7 +421,7 @@ static void readInput(void)
     {
         exitError("Malloc for argument1 failed", errno);
     }
-
+   
     if ((argument2 = malloc(MAXARGSIZE)) == NULL)
     {
         exitError("Malloc for argument1 failed", errno);
