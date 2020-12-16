@@ -109,57 +109,57 @@ static void writeToPipes(void)
     //Highest
     if (dprintf(pipefds[0][1], Ah) <=  0)
     {
-        exitError("Could not write Ah to readPipe in Parent.", errno);
+        exitError("Could not write Ah to readPipe in Parent.", 0);
     }
-    if ((write(pipefds[0][1], Bh, strlen(Bh)) == -1))
+    if (dprintf(pipefds[0][1], Bh) <=  0)
     {
-        exitError("Could not write Bh to readPipe in Parent.", errno);
+        exitError("Could not write Bh to readPipe in Parent.", 0);
     }
     if (close(pipefds[0][1]) == -1)
     {
-        exitError("Pipe end could not be closed.", errno);
+        exitError("Pipe end could not be closed.", 0);
     }
 
     // Highlow
-    if ((write(pipefds[2][1], Ah, strlen(Ah)) == -1))
+    if (dprintf(pipefds[2][1], Ah) <=  0)
     {
-        exitError("Could not write Ah to readPipe in Parent.", errno);
+        exitError("Could not write Ah to readPipe in Parent.", 0);
     }
-    if ((write(pipefds[2][1], Bl, strlen(Bl)) == -1))
+    if (dprintf(pipefds[2][1], Bl) <=  0)
     {
-        exitError("Could not write Bh to readPipe in Parent.", errno);
+        exitError("Could not write Bl to readPipe in Parent.", 0);
     }
     if (close(pipefds[2][1]) == -1)
     {
-        exitError("Pipe end could not be closed.", errno);
+        exitError("Pipe end could not be closed.", 0);
     }
 
     // LowHigh
-    if ((write(pipefds[4][1], Al, strlen(Al)) == -1))
+    if (dprintf(pipefds[4][1], Al) <=  0)
     {
-        exitError("Could not write Ah to readPipe in Parent.", errno);
+        exitError("Could not write Al to readPipe in Parent.", 0);
     }
-    if ((write(pipefds[4][1], Bh, strlen(Bh)) == -1))
+    if (dprintf(pipefds[4][1], Bh) <=  0)
     {
-        exitError("Could not write Bh to readPipe in Parent.", errno);
+        exitError("Could not write Bh to readPipe in Parent.", 0);
     }
     if (close(pipefds[4][1]) == -1)
     {
-        exitError("Pipe end could not be closed.", errno);
+        exitError("Pipe end could not be closed.", 0);
     }
 
     // Lowest
-    if ((write(pipefds[6][1], Al, strlen(Al)) == -1))
+    if (dprintf(pipefds[6][1], Al) <=  0)
     {
-        exitError("Could not write Ah to readPipe in Parent.", errno);
+        exitError("Could not write Al to readPipe in Parent.", 0);
     }
-    if ((write(pipefds[6][1], Bl, strlen(Bl)) == -1))
+    if (dprintf(pipefds[6][1], Bl) <=  0)
     {
-        exitError("Could not write Bh to readPipe in Parent.", errno);
+        exitError("Could not write Bl to readPipe in Parent.", 0);
     }
     if (close(pipefds[6][1]) == -1)
     {
-        exitError("Pipe end could not be closed.", errno);
+        exitError("Pipe end could not be closed.", 0);
     }
 }
 
