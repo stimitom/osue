@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 char *pgmName;
 char *argument1;
@@ -15,18 +17,21 @@ char *Al;
 char *Bh;
 char *Bl;
 pid_t pids[4];
+int pipefds[8][2];
 
-void exitError(char *message, int errnum);
-void readInput(void);
-void cleanUp(void);
-void argumentsAreValidHexa(void);
-void multiplyAndWrite(void);
-void splitArguments(int numberOfDigits);
-void forkIntoChildProcesses(void);
-void createPipes(void);
-void openPipes(void); 
-void fillPipes(void);
-void closeUnneccessaryPipes(void);
+static void exitError(char *message, int errnum);
+static void readInput(void);
+static void cleanUp(void);
+static void argumentsAreValidHexa(void);
+static void multiplyAndWrite(void);
+static void splitArguments(int numberOfDigits);
+static void forkIntoChildProcesses(void);
+static void createPipes(void);
+static void closeUnneccasaryPipeEndsParent(void);
+static void redirectInAndOut(void);
+static void closeAllPipesExcept(int readPipeNumber, int writePipeNumber);
+static void writeToPipes(void);
+static void waitForChildren(void);
 
 int main(int argc, char *argv[])
 {
@@ -43,66 +48,284 @@ int main(int argc, char *argv[])
 
     splitArguments(numberOfDigits);
 
-    // int pipefd[2];
-    // if (pipe(pipefd) == -1)
-    // {
-    //     exitError("Pipe could not be created.", errno);
-    // }
+    createPipes();
 
-    for (int i = 0; i < 4; i++)
+    forkIntoChildProcesses();
+
+    redirectInAndOut();
+
+    if (pids[0] && pids[1] && pids[2] && pids[3])
     {
-        switch (pids[i])
+        //Only here in parent
+        closeUnneccasaryPipeEndsParent();
+        writeToPipes();
+        waitForChildren();
+    }
+}
+
+static void waitForChildren(void)
+{   
+    int statuses[4];
+    if (waitpid(pids[0], &statuses[0], 0) == -1)
+    {
+        exitError("Waiting for highest child failed.", errno);
+    }
+    if (waitpid(pids[1], &statuses[1], 0) == -1)
+    {
+        exitError("Waiting for highest child failed.", errno);
+    }
+    if (waitpid(pids[2], &statuses[2], 0) == -1)
+    {
+        exitError("Waiting for highest child failed.", errno);
+    }
+    if (waitpid(pids[3], &statuses[3], 0) == -1)
+    {
+        exitError("Waiting for highest child failed.", errno);
+    }
+
+    if (!WIFEXITED(statuses[0]))
+    {
+        exitError(" A Child process did not terminate properly. Status", WEXITSTATUS(statuses[0]));
+    }
+
+    if (!WIFEXITED(statuses[1]))
+    {
+        exitError(" A Child process did not terminate properly. Status", WEXITSTATUS(statuses[1]));
+    }
+
+    if (!WIFEXITED(statuses[2]))
+    {
+        exitError(" A Child process did not terminate properly. Status", WEXITSTATUS(statuses[2]));
+    }
+
+    if (!WIFEXITED(statuses[3]))
+    {
+        exitError(" A Child process did not terminate properly. Status", WEXITSTATUS(statuses[3]));
+    }
+}
+
+static void writeToPipes(void)
+{
+    //Highest
+    if (dprintf(pipefds[0][1], Ah) <=  0)
+    {
+        exitError("Could not write Ah to readPipe in Parent.", errno);
+    }
+    if ((write(pipefds[0][1], Bh, strlen(Bh)) == -1))
+    {
+        exitError("Could not write Bh to readPipe in Parent.", errno);
+    }
+    if (close(pipefds[0][1]) == -1)
+    {
+        exitError("Pipe end could not be closed.", errno);
+    }
+
+    // Highlow
+    if ((write(pipefds[2][1], Ah, strlen(Ah)) == -1))
+    {
+        exitError("Could not write Ah to readPipe in Parent.", errno);
+    }
+    if ((write(pipefds[2][1], Bl, strlen(Bl)) == -1))
+    {
+        exitError("Could not write Bh to readPipe in Parent.", errno);
+    }
+    if (close(pipefds[2][1]) == -1)
+    {
+        exitError("Pipe end could not be closed.", errno);
+    }
+
+    // LowHigh
+    if ((write(pipefds[4][1], Al, strlen(Al)) == -1))
+    {
+        exitError("Could not write Ah to readPipe in Parent.", errno);
+    }
+    if ((write(pipefds[4][1], Bh, strlen(Bh)) == -1))
+    {
+        exitError("Could not write Bh to readPipe in Parent.", errno);
+    }
+    if (close(pipefds[4][1]) == -1)
+    {
+        exitError("Pipe end could not be closed.", errno);
+    }
+
+    // Lowest
+    if ((write(pipefds[6][1], Al, strlen(Al)) == -1))
+    {
+        exitError("Could not write Ah to readPipe in Parent.", errno);
+    }
+    if ((write(pipefds[6][1], Bl, strlen(Bl)) == -1))
+    {
+        exitError("Could not write Bh to readPipe in Parent.", errno);
+    }
+    if (close(pipefds[6][1]) == -1)
+    {
+        exitError("Pipe end could not be closed.", errno);
+    }
+}
+
+static void closeAllPipesExcept(int readPipeNumber, int writePipeNumber)
+{
+    for (int i = 0; i < 8; i++)
+    {
+        if (i != readPipeNumber)
         {
-        case -2:
-            //not set
-            break;
-        case 0:
-            //child
-            break;
-        default:
-            //parent of pids[i]
-            break;
+            if (close(pipefds[i][0]) == -1)
+            {
+                exitError("Pipe read end could not be closed.", errno);
+            }
+        }
+        if (i != writePipeNumber)
+        {
+            if (close(pipefds[i][1]) == -1)
+            {
+                exitError("Pipe write end could not be closed.", errno);
+            }
         }
     }
 }
 
-void createPipes(void)
+static void redirectInAndOut(void)
 {
+    if (!pids[0])
+    {
+        //Child process highest
+        if (dup2(pipefds[0][0], STDIN_FILENO) == -1)
+        {
+            exitError("Could not redirect stdin to readpipe.", errno);
+        }
+
+        if (dup2(pipefds[1][1], STDOUT_FILENO) == -1)
+        {
+            exitError("Could not redirect stdout to writepipe.", errno);
+        }
+
+        closeAllPipesExcept(0, 1);
+    }
+    else if (!pids[1])
+    {
+        //Child process highlow
+        if (dup2(pipefds[2][0], STDIN_FILENO) == -1)
+        {
+            exitError("Could not redirect stdin to readpipe.", errno);
+        }
+
+        if (dup2(pipefds[3][1], STDOUT_FILENO) == -1)
+        {
+            exitError("Could not redirect stdout to writepipe.", errno);
+        }
+        closeAllPipesExcept(2, 3);
+    }
+    else if (!pids[2])
+    {
+        //child process lowhigh
+        if (dup2(pipefds[4][0], STDIN_FILENO) == -1)
+        {
+            exitError("Could not redirect stdin to readpipe.", errno);
+        }
+
+        if (dup2(pipefds[5][1], STDOUT_FILENO) == -1)
+        {
+            exitError("Could not redirect stdout to writepipe.", errno);
+        }
+
+        closeAllPipesExcept(4, 5);
+    }
+    else if (!pids[3])
+    {
+        //child process lowest
+        if (dup2(pipefds[6][0], STDIN_FILENO) == -1)
+        {
+            exitError("Could not redirect stdin to readpipe.", errno);
+        }
+
+        if (dup2(pipefds[7][1], STDOUT_FILENO) == -1)
+        {
+            exitError("Could not redirect stdout to writepipe.", errno);
+        }
+
+        closeAllPipesExcept(6, 7);
+    }else{
+        //parent 
+        return;
+    }
+    execlp
 }
 
-void forkIntoChildProcesses(void)
+static void createPipes(void)
 {
-    pid_t pidAh = -2;
-    pid_t pidAl = -2;
-    pid_t pidBh = -2;
-    pid_t pidBl = -2;
-
-    if ((pidAh = fork()) == -1)
+    for (int i = 0; i < 8; i++)
     {
-        exitError("Could not fork child process Ah", errno);
+        if (pipe(pipefds[i]) == -1)
+        {
+            exitError("Pipe could not be created.", errno);
+        }
     }
-
-    if ((pidAl = fork()) == -1)
-    {
-        exitError("Could not fork child process Al", errno);
-    }
-
-    if ((pidBh = fork()) == -1)
-    {
-        exitError("Could not fork child process Bh", errno);
-    }
-
-    if ((pidBl = fork()) == -1)
-    {
-        exitError("Could not fork child process Bl", errno);
-    }
-    pids[1] = pidAh;
-    pids[2] = pidAl;
-    pids[3] = pidBh;
-    pids[4] = pidBl;
 }
 
-void splitArguments(int numberOfDigits)
+static void closeUnneccasaryPipeEndsParent(void)
+{
+    for (int i = 0; i < 8; i++)
+    {
+        if ((i % 2) == 0)
+        {
+            // Closes Read Pipe Read End From Parent
+            if (close(pipefds[i][0]) == -1)
+            {
+                exitError("Pipe end could not be closed.", errno);
+            }
+        }
+        else
+        {
+            // Closes Write Pipe Write End From Parent
+            if (close(pipefds[i][1]) == -1)
+            {
+                exitError("Pipe end could not be closed.", errno);
+            }
+        }
+    }
+}
+
+static void forkIntoChildProcesses(void)
+{
+    pid_t pidHighest = -2;
+    pid_t pidHighLow = -2;
+    pid_t pidLowHigh = -2;
+    pid_t pidLowest = -2;
+
+    if ((pidHighest = fork()) == -1)
+    {
+        exitError("Could not fork child process Ah.", errno);
+    }
+
+    if (pidHighest > 0)
+    {
+        if ((pidHighLow = fork()) == -1)
+        {
+            exitError("Could not fork child process Al.", errno);
+        }
+    }
+    if (pidHighLow > 0)
+    {
+        if ((pidLowHigh = fork()) == -1)
+        {
+            exitError("Could not fork child process Bh.", errno);
+        }
+    }
+    if (pidLowHigh > 0)
+    {
+        if ((pidLowest = fork()) == -1)
+        {
+            exitError("Could not fork child process Bl.", errno);
+        }
+    }
+
+    pids[0] = pidHighest;
+    pids[1] = pidHighLow;
+    pids[2] = pidLowHigh;
+    pids[3] = pidLowest;
+}
+
+static void splitArguments(int numberOfDigits)
 {
     if ((Ah = malloc(numberOfDigits * sizeof(char))) == NULL)
     {
@@ -138,7 +361,7 @@ void splitArguments(int numberOfDigits)
     Bl[numberOfDigits / 2] = '\0';
 }
 
-void multiplyAndWrite(void)
+static void multiplyAndWrite(void)
 {
     long int aHex;
     char *endpointer;
@@ -174,7 +397,7 @@ void multiplyAndWrite(void)
     fprintf(stdout, "%x", (int)res);
 }
 
-void readInput(void)
+static void readInput(void)
 {
     if ((argument1 = malloc(MAXARGSIZE)) == NULL)
     {
@@ -222,7 +445,7 @@ void readInput(void)
     argumentsAreValidHexa();
 }
 
-void argumentsAreValidHexa(void)
+static void argumentsAreValidHexa(void)
 {
     for (int i = 0; i < strlen(argument1); i++)
     {
@@ -237,13 +460,13 @@ void argumentsAreValidHexa(void)
     }
 }
 
-void cleanUp(void)
+static void cleanUp(void)
 {
     free(argument1);
     free(argument2);
 }
 
-void exitError(char *message, int errnum)
+static void exitError(char *message, int errnum)
 {
     cleanUp();
     if (errnum != 0)
