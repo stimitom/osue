@@ -33,6 +33,8 @@ static void closeAllPipesExcept(int readPipeNumber, int writePipeNumber);
 static void writeToPipes(void);
 static void waitForChildren(void);
 static void executeChildProcess(void);
+static void readFromChildren(void);
+static void appendZeroes(char *initial, int numberOfDigits);
 
 int main(int argc, char *argv[])
 {
@@ -61,6 +63,7 @@ int main(int argc, char *argv[])
         closeUnneccasaryPipeEndsParent();
         writeToPipes();
         waitForChildren();
+        readFromChildren();
     }
     else
     {
@@ -68,7 +71,128 @@ int main(int argc, char *argv[])
         executeChildProcess();
     }
 }
-static void executeChildProcess(void){
+
+static void appendZeroes(char *initial, int numberOfDigits)
+{   
+    int oldlength = strlen(initial);
+    if (realloc(initial, (oldlength+numberOfDigits) * sizeof(char)) == NULL)
+    {
+        exitError("Realloc for char 'initial' failed.", errno);
+    }
+
+    for (int i = 0; i < numberOfDigits; i++)
+    {
+        initial[i+oldlength] = '0';
+    }
+}
+
+static void readFromChildren(void)
+{
+    FILE *highest;
+    FILE *highLow;
+    FILE *lowHigh;
+    FILE *lowest;
+
+    if ((highest = fdopen(pipefds[1][0], "r")) == NULL)
+    {
+        exitError("FILE 'highest' could not be opened.", errno);
+    }
+
+    if ((highLow = fdopen(pipefds[3][0], "r")) == NULL)
+    {
+        exitError("FILE 'highLow' could not be opened.", errno);
+    }
+
+    if ((lowHigh = fdopen(pipefds[5][0], "r")) == NULL)
+    {
+        exitError("FILE 'lowHigh' could not be opened.", errno);
+    }
+
+    if ((lowest = fdopen(pipefds[7][0], "r")) == NULL)
+    {
+        exitError("FILE 'lowest' could not be opened.", errno);
+    }
+
+    char *highestVal = NULL;
+    size_t lenHighest = 0;
+    ssize_t linesizeHighest;
+    while ((linesizeHighest = getline(&highestVal, &lenHighest, highest)) != -1)
+    {
+        if (highestVal[linesizeHighest - 1] == '\n')
+        {
+            highestVal[linesizeHighest - 1] = '\0';
+            --linesizeHighest;
+        }
+    }
+
+    if (close(pipefds[1][0]) == -1)
+    {
+        exitError("Pipe end could not be closed.", 0);
+    }
+
+    char *highLowVal = NULL;
+    size_t lenHighLow = 0;
+    ssize_t linesizeHighLow;
+    while ((linesizeHighLow = getline(&highLowVal, &lenHighLow, highLow)) != -1)
+    {
+        if (highLowVal[linesizeHighLow - 1] == '\n')
+        {
+            highLowVal[linesizeHighLow - 1] = '\0';
+            --linesizeHighLow;
+        }
+    }
+
+    if (close(pipefds[3][0]) == -1)
+    {
+        exitError("Pipe end could not be closed.", 0);
+    }
+
+    char *lowHighVal = NULL;
+    size_t lenLowHigh = 0;
+    ssize_t linesizeLowHigh;
+    while ((linesizeLowHigh = getline(&lowHighVal, &lenLowHigh, lowHigh)) != -1)
+    {
+        if (lowHighVal[linesizeLowHigh - 1] == '\n')
+        {
+            lowHighVal[linesizeLowHigh - 1] = '\0';
+            --linesizeLowHigh;
+        }
+    }
+
+    if (close(pipefds[5][0]) == -1)
+    {
+        exitError("Pipe end could not be closed.", 0);
+    }
+
+    char *lowestVal = NULL;
+    size_t lenLowest = 0;
+    ssize_t linesizeLowest;
+    while ((linesizeLowest = getline(&lowestVal, &lenLowest, lowest)) != -1)
+    {
+        if (lowestVal[linesizeLowest - 1] == '\n')
+        {
+            lowestVal[linesizeLowest - 1] = '\0';
+            --linesizeLowest;
+        }
+    }
+
+    if (close(pipefds[7][0]) == -1)
+    {
+        exitError("Pipe end could not be closed.", 0);
+    }
+
+    appendZeroes(highestVal, strlen(argument1));
+    appendZeroes(highLowVal, strlen(argument1) / 2);
+    appendZeroes(lowHighVal, strlen(argument1) / 2);
+
+    fprintf(stderr, "read1: %s\n", highestVal);
+    fprintf(stderr, "read2: %s\n", highLowVal);
+    fprintf(stderr, "read3: %s\n", lowHighVal);
+    fprintf(stderr, "read4: %s\n", lowestVal);
+}
+
+static void executeChildProcess(void)
+{
     if (execlp(pgmName, pgmName, (char *)NULL) == -1)
     {
         exitError("The child programm could not be executed.", errno);
@@ -119,11 +243,11 @@ static void waitForChildren(void)
 static void writeToPipes(void)
 {
     //Highest
-    if (dprintf(pipefds[0][1],"%s\n", Ah) <= 0)
+    if (dprintf(pipefds[0][1], "%s\n", Ah) <= 0)
     {
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[0][1], "%s",Bh) <= 0)
+    if (dprintf(pipefds[0][1], "%s", Bh) <= 0)
     {
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
@@ -133,11 +257,11 @@ static void writeToPipes(void)
     }
 
     // Highlow
-    if (dprintf(pipefds[2][1],"%s\n", Ah) <= 0)
+    if (dprintf(pipefds[2][1], "%s\n", Ah) <= 0)
     {
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[2][1],"%s", Bl) <= 0)
+    if (dprintf(pipefds[2][1], "%s", Bl) <= 0)
     {
         exitError("Could not write Bl to readPipe in Parent.", 0);
     }
@@ -147,11 +271,11 @@ static void writeToPipes(void)
     }
 
     // LowHigh
-    if (dprintf(pipefds[4][1],"%s\n", Al) <= 0)
+    if (dprintf(pipefds[4][1], "%s\n", Al) <= 0)
     {
         exitError("Could not write Al to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[4][1],"%s", Bh) <= 0)
+    if (dprintf(pipefds[4][1], "%s", Bh) <= 0)
     {
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
@@ -161,11 +285,11 @@ static void writeToPipes(void)
     }
 
     // Lowest
-    if (dprintf(pipefds[6][1],"%s\n", Al) <= 0)
+    if (dprintf(pipefds[6][1], "%s\n", Al) <= 0)
     {
         exitError("Could not write Al to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[6][1],"%s", Bl) <= 0)
+    if (dprintf(pipefds[6][1], "%s", Bl) <= 0)
     {
         exitError("Could not write Bl to readPipe in Parent.", 0);
     }
@@ -257,16 +381,6 @@ static void redirectInAndOut(void)
 
         closeAllPipesExcept(6, 7);
     }
-    else
-    {
-        //parent
-        return;
-    }
-
-    // if (execlp(pgmName, pgmName, (char *)NULL) == -1)
-    // {
-    //     exitError("The child programm could not be executed.", errno);
-    // }
 }
 
 static void createPipes(void)
@@ -421,7 +535,7 @@ static void readInput(void)
     {
         exitError("Malloc for argument1 failed", errno);
     }
-   
+
     if ((argument2 = malloc(MAXARGSIZE)) == NULL)
     {
         exitError("Malloc for argument1 failed", errno);
