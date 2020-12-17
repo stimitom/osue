@@ -35,6 +35,8 @@ static void waitForChildren(void);
 static void executeChildProcess(void);
 static void readFromChildren(void);
 static void appendZeroes(char *initial, int numberOfDigits);
+static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest);
+static void reverseString(char *str);
 
 int main(int argc, char *argv[])
 {
@@ -72,17 +74,90 @@ int main(int argc, char *argv[])
     }
 }
 
+static void reverseString(char *str){
+
+    if (!str || ! *str){
+        return str;
+    }
+
+    int i = strlen(str) - 1, j = 0;
+
+    char c;
+    while (i > j)
+    {
+        c = str[i];
+        str[i] = str[j];
+        str[j] = c;
+        i--;
+        j++;
+    }
+    return str;
+}
+
+static void addHexStrings(char *first, char *second)
+{
+    // Before proceeding further, make sure length
+    // of str2 is larger.
+    if (strlen(first) > strlen(second))
+    {
+        return addHexStrings(second, first);
+    }
+
+    // Take an empty string for storing result
+    char result[] = "";
+
+    // Calculate length of both string
+    int n1 = strlen(first), n2 = strlen(second);
+    int diff = n2 - n1;
+
+    // Initially take carry zero
+    int carry = 0;
+
+    // Traverse from end of both strings
+    for (int i = n1 - 1; i >= 0; i--)
+    {
+        // Do school mathematics, compute sum of
+        // current digits and carry
+        int sum = ((first[i] - '0') +
+                   (second[i + diff] - '0') +
+                   carry);
+        strncat(result, (sum % 16), 1);
+        carry = sum / 16;
+    }
+
+    // Add remaining digits of str2[]
+    for (int i = n2 - n1 - 1; i >= 0; i--)
+    {
+        int sum = ((second[i] - '0') + carry);
+        strncat(result, (sum % 16 + '0'), 2);
+        carry = sum / 16;
+    }
+
+    // Add remaining carry
+    if (carry)
+    {
+        strcat(result, (carry + '0'));
+    }
+
+    // reverse resultant string
+    return reverseString(result);
+}
+
+static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest)
+{
+}
+
 static void appendZeroes(char *initial, int numberOfDigits)
-{   
+{
     int oldlength = strlen(initial);
-    if (realloc(initial, (oldlength+numberOfDigits) * sizeof(char)) == NULL)
+    if (realloc(initial, (oldlength + numberOfDigits) * sizeof(char)) == NULL)
     {
         exitError("Realloc for char 'initial' failed.", errno);
     }
 
     for (int i = 0; i < numberOfDigits; i++)
     {
-        initial[i+oldlength] = '0';
+        initial[i + oldlength] = '0';
     }
 }
 
@@ -125,9 +200,9 @@ static void readFromChildren(void)
         }
     }
 
-    if (close(pipefds[1][0]) == -1)
+    if (fclose(highest) == EOF)
     {
-        exitError("Pipe end could not be closed.", 0);
+        exitError("'highest' could not be closed.", errno);
     }
 
     char *highLowVal = NULL;
@@ -142,9 +217,9 @@ static void readFromChildren(void)
         }
     }
 
-    if (close(pipefds[3][0]) == -1)
+    if (fclose(highLow) == EOF)
     {
-        exitError("Pipe end could not be closed.", 0);
+        exitError("'highlow' could not be closed.", errno);
     }
 
     char *lowHighVal = NULL;
@@ -159,9 +234,9 @@ static void readFromChildren(void)
         }
     }
 
-    if (close(pipefds[5][0]) == -1)
+    if (fclose(lowHigh) == EOF)
     {
-        exitError("Pipe end could not be closed.", 0);
+        exitError("'lowhigh' could not be closed.", errno);
     }
 
     char *lowestVal = NULL;
@@ -176,19 +251,16 @@ static void readFromChildren(void)
         }
     }
 
-    if (close(pipefds[7][0]) == -1)
+    if (fclose(lowest) == EOF)
     {
-        exitError("Pipe end could not be closed.", 0);
+        exitError("'lowest' could not be closed.", errno);
     }
 
     appendZeroes(highestVal, strlen(argument1));
     appendZeroes(highLowVal, strlen(argument1) / 2);
     appendZeroes(lowHighVal, strlen(argument1) / 2);
 
-    fprintf(stderr, "read1: %s\n", highestVal);
-    fprintf(stderr, "read2: %s\n", highLowVal);
-    fprintf(stderr, "read3: %s\n", lowHighVal);
-    fprintf(stderr, "read4: %s\n", lowestVal);
+    addPartSolutions(highestVal, highLowVal, lowHighVal, lowestVal);
 }
 
 static void executeChildProcess(void)
