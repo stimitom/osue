@@ -5,27 +5,34 @@
 
 char *pgmName;
 
-static void exitError(char *message, int errnum);
 static int hexCharToInt(char character);
 static void fromIntToHexChar(int i, char *c);
 static char *reverseString(char *str);
-static char *addHexStrings(char *first, char *second);
+static char *addHexStrings(char *a, char *b);
 
 int main(int argc, char *argv[])
 {
     pgmName = argv[0];
-    char *x = malloc(25);
-    x = addHexStrings("AFAF", "100");
+    printf("a%s\n", addHexStrings("FFFFFFFFF", "FFFFF"));
 }
 
 static int hexCharToInt(char character)
 {
+  
     if (character >= '0' && character <= '9')
+    {
+
         return character - '0';
+    }
     if (character >= 'A' && character <= 'F')
+    {
+
         return character - 'A' + 10;
+    }
     if (character >= 'a' && character <= 'f')
+    {
         return character - 'a' + 10;
+    }
     return -1;
 }
 
@@ -56,13 +63,23 @@ static char *reverseString(char *str)
     return str;
 }
 
-static char *addHexStrings(char *first, char *second)
+static char *addHexStrings(char *a, char *b)
 {
+   char *first; 
+   char *second;
     // Before proceeding further, make sure length
     // of str2 is larger.
-    if (strlen(first) > strlen(second))
-    {
-        return addHexStrings(second, first);
+    if (strlen(a) > strlen(b))
+    {   
+        second =  malloc(strlen(a));
+        strncpy(second, a, strlen(a));
+        first =  malloc(strlen(b));
+        strncpy(first, b, strlen(b));
+    }else{
+        second =  malloc(strlen(b));
+        strncpy(second, b, strlen(b));
+        first =  malloc(strlen(a));
+        strncpy(first, a, strlen(a));
     }
 
     int n1 = strlen(first), n2 = strlen(second);
@@ -72,16 +89,13 @@ static char *addHexStrings(char *first, char *second)
     char result[(n1 + n2)];
     memset(result, 0, (n1 + n2));
 
-    int resultLen = 0;
-
     // Initially take carry zero
-    char carry = '\0';
+    char carry = '0';
 
     char *temp;
-    if ((temp = malloc(1)) == NULL)
-    {
-        exitError("Malloc for temp failed.", errno);
-    }
+
+    temp = malloc(1);
+    // ERror handling
 
     // Traverse from end of both strings
     for (int i = n1 - 1; i >= 0; i--)
@@ -90,36 +104,32 @@ static char *addHexStrings(char *first, char *second)
         fromIntToHexChar((sum % 16), temp);
         strncat(result, temp, 1);
         fromIntToHexChar((sum / 16), &carry);
+        printf("temp: %s\n", carry);
     }
 
     // Add remaining digits of str2[]
     char *temp2;
-    if ((temp2 = malloc(1)) == NULL)
-    {
-        exitError("Malloc for temp2 failed.", errno);
-    }
+    temp2 = malloc(1);
+    //Error handling
+
     for (int i = n2 - n1 - 1; i >= 0; i--)
     {
         int sum = hexCharToInt(second[i]) + hexCharToInt(carry);
 
         fromIntToHexChar((sum % 16), temp2);
-        strncat(temp2, '0', 1);
-        strncat(result, temp2, 2);
-        // carry = fromIntToHexChar (sum / 16);
+    
+        strncat(result, temp2, 1);
+        fromIntToHexChar((sum / 16), &carry);
     }
 
     // Add remaining carry
-    // if (carry)
-    // {
-    //     strncat(carry, '0', 1);
-    //     strcat(result, carry);
-    // }
+    if (carry)
+    {   
+        char arr[1];
+        arr[0] = carry;
+        strcat(result, arr);
+    }
 
     // reverse resultant string
     return reverseString(result);
-}
-
-static void exitError(char *message, int errnum)
-{
-    fprintf("error\n %s, %d", message, errnum);
 }
