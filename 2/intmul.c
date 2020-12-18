@@ -128,19 +128,32 @@ static void addHexStrings(char *a, char *b, char *endResult)
 {
     char *first;
     char *second;
+
     // Length of second needs to be > length of first
     if (strlen(a) > strlen(b))
     {
-        second = malloc(strlen(a));
+        if ((second = malloc(strlen(a))) == NULL)
+        {
+            exitError("Malloc for second failed.", errno);
+        }
         strncpy(second, a, strlen(a));
-        first = malloc(strlen(b));
+        if ((first = malloc(strlen(b))) == NULL)
+        {
+            exitError("Malloc for first failed.", errno);
+        }
         strncpy(first, b, strlen(b));
     }
     else
     {
-        second = malloc(strlen(b));
+        if ((second = malloc(strlen(b))) == NULL)
+        {
+            exitError("Malloc for second failed.", errno);
+        }
         strncpy(second, b, strlen(b));
-        first = malloc(strlen(a));
+        if ((first = malloc(strlen(a))) == NULL)
+        {
+            exitError("Malloc for first failed.", errno);
+        }
         strncpy(first, a, strlen(a));
     }
 
@@ -153,13 +166,10 @@ static void addHexStrings(char *a, char *b, char *endResult)
     memset(result, 0, (n1 + n2));
 
     // Initially take carry zero
-    char *carry = malloc(1);
+    char carry[1];
     carry[0] = '0';
 
-    char *temp;
-
-    temp = malloc(1);
-    // ERror handling
+    char temp[1];
 
     // Traverse from end of both strings
     for (int i = n1 - 1; i >= 0; i--)
@@ -172,9 +182,7 @@ static void addHexStrings(char *a, char *b, char *endResult)
     }
 
     // Add remaining digits of str2[]
-    char *temp2;
-    temp2 = malloc(1);
-    //Error handling
+    char temp2[1];
 
     for (int i = n2 - n1 - 1; i >= 0; i--)
     {
@@ -188,36 +196,43 @@ static void addHexStrings(char *a, char *b, char *endResult)
     }
 
     // Add remaining carry
-    if (carry[0])
+    if (carry[0] != '0')
     {
-        strcat(result, carry);
+        strncat(result, carry, 1);
         resultLen++;
     }
 
-    if (realloc(endResult, resultLen) == NULL)
+    if (realloc(endResult, strlen(result)) == NULL)
     {
         exitError("Realloc for endresult failed.", errno);
     }
+
     strncpy(endResult, reverseString(result), resultLen);
+
+    free(first);
+    free(second);
 }
 
 static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest)
 {
-    char *total = malloc(1);
+    char *total;
+    if ((total = malloc(0)) == NULL)
+    {
+        exitError("Malloc for total failed.", errno);
+    }
     addHexStrings(highest, highlow, total);
-    char *total2 = malloc(1);
-    addHexStrings(total, lowhigh, total2);
-    char *total3 = malloc(1);
-    addHexStrings(total2, lowest, total3);
+    addHexStrings(total, lowhigh, total);
+    addHexStrings(total, lowest, total);
 
-    fprintf(stdout,"%s\n",total3);
+    fprintf(stdout, "%s\n", total);
+    free(total);
     exit(EXIT_SUCCESS);
 }
 
 static void appendZeroes(char *initial, int numberOfDigits)
 {
     int oldlength = strlen(initial);
-    if (realloc(initial, (oldlength + numberOfDigits) * sizeof(char)) == NULL)
+    if (realloc(initial, (oldlength + numberOfDigits)) == NULL)
     {
         exitError("Realloc for char 'initial' failed.", errno);
     }
@@ -395,19 +410,20 @@ static void writeToPipes(void)
         exitError("FILE 'highest' could not be opened for writing.", errno);
     }
 
-    if(fprintf(highest,"%s\n",Ah) < 0){
+    if (fprintf(highest, "%s\n", Ah) < 0)
+    {
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
 
-     if(fprintf(highest,"%s",Bh) < 0){
+    if (fprintf(highest, "%s", Bh) < 0)
+    {
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
 
-     if (fclose(highest) == EOF)
+    if (fclose(highest) == EOF)
     {
         exitError("Highest could not be closed.", errno);
     }
-
 
     //Highlow
     if ((highLow = fdopen(pipefds[2][1], "w")) == NULL)
@@ -415,19 +431,20 @@ static void writeToPipes(void)
         exitError("FILE 'highLow' could not be opened for writing.", errno);
     }
 
-    if(fprintf(highLow,"%s\n",Ah) < 0){
+    if (fprintf(highLow, "%s\n", Ah) < 0)
+    {
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
 
-     if(fprintf(highLow,"%s",Bl) < 0){
+    if (fprintf(highLow, "%s", Bl) < 0)
+    {
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
 
-     if (fclose(highLow) == EOF)
+    if (fclose(highLow) == EOF)
     {
         exitError("highLow could not be closed.", errno);
     }
-
 
     //LowHigh
     if ((lowHigh = fdopen(pipefds[4][1], "w")) == NULL)
@@ -435,15 +452,17 @@ static void writeToPipes(void)
         exitError("FILE 'lowHigh' could not be opened for writing.", errno);
     }
 
-    if(fprintf(lowHigh,"%s\n",Al) < 0){
+    if (fprintf(lowHigh, "%s\n", Al) < 0)
+    {
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
 
-     if(fprintf(lowHigh,"%s",Bh) < 0){
+    if (fprintf(lowHigh, "%s", Bh) < 0)
+    {
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
 
-     if (fclose(lowHigh) == EOF)
+    if (fclose(lowHigh) == EOF)
     {
         exitError("lowHigh could not be closed.", errno);
     }
@@ -454,19 +473,20 @@ static void writeToPipes(void)
         exitError("FILE 'lowest' could not be opened for writing.", errno);
     }
 
-    if(fprintf(lowest,"%s\n",Al) < 0){
+    if (fprintf(lowest, "%s\n", Al) < 0)
+    {
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
 
-     if(fprintf(lowest,"%s",Bl) < 0){
+    if (fprintf(lowest, "%s", Bl) < 0)
+    {
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
 
-     if (fclose(lowest) == EOF)
+    if (fclose(lowest) == EOF)
     {
         exitError("lowest could not be closed.", errno);
     }
-
 }
 
 static void closeAllPipesExcept(int readPipeNumber, int writePipeNumber)
@@ -701,37 +721,35 @@ static void multiplyAndWrite(void)
 
 static void readInput(void)
 {
-    if ((argument1 = malloc(MAXARGSIZE)) == NULL)
+    char *buff = NULL;
+    size_t len = 0;
+    ssize_t linesize;
+    int arg1filled = 0;
+    while ((linesize = getline(&buff, &len, stdin)) != -1)
     {
-        exitError("Malloc for argument1 failed", errno);
-    }
 
-    if ((argument2 = malloc(MAXARGSIZE)) == NULL)
-    {
-        exitError("Malloc for argument1 failed", errno);
-    }
-
-    if (fgets(argument1, MAXARGSIZE, stdin) == NULL)
-    {
-        exitError("First argument could not be read.", 0);
-    }
-
-    if (fgets(argument2, MAXARGSIZE, stdin) == NULL)
-    {
-        exitError("Second argument could not be read.", 0);
-    }
-
-    argument1[strlen(argument1) - 1] = '\0';
-    argument2[strlen(argument2)] = '\0';
-
-    if ((realloc(argument1, strlen(argument1)) == NULL))
-    {
-        exitError("Realloc for argument1 failed.", 0);
-    }
-
-    if ((realloc(argument2, strlen(argument2)) == NULL))
-    {
-        exitError("Realloc for argument1 failed.", 0);
+        if (!arg1filled)
+        {
+            if (buff[linesize - 1] == '\n')
+            {
+                buff[linesize - 1] = '\0';
+                --linesize;
+            }
+            if ((argument1 = malloc(linesize)) == NULL)
+            {
+                exitError("Malloc for argument1 failed.", errno);
+            }
+            strncpy(argument1, buff, linesize);
+            arg1filled++;
+        }
+        else
+        {
+            if ((argument2 = malloc(linesize)) == NULL)
+            {
+                exitError("Malloc for argument2 failed.", errno);
+            }
+            strncpy(argument2, buff, linesize);
+        }
     }
 
     if (strlen(argument1) != strlen(argument2))
