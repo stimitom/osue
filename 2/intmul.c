@@ -36,7 +36,10 @@ static void executeChildProcess(void);
 static void readFromChildren(void);
 static void appendZeroes(char *initial, int numberOfDigits);
 static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest);
-static void reverseString(char *str);
+static int hexCharToInt(char character);
+static void fromIntToHexChar(int i, char *c);
+static char *reverseString(char *str);
+static void addHexStrings(char *a, char *b, char *endResult);
 
 int main(int argc, char *argv[])
 {
@@ -74,9 +77,36 @@ int main(int argc, char *argv[])
     }
 }
 
-static void reverseString(char *str){
+static int hexCharToInt(char character)
+{
 
-    if (!str || ! *str){
+    if (character >= '0' && character <= '9')
+    {
+
+        return character - '0';
+    }
+    if (character >= 'A' && character <= 'F')
+    {
+
+        return character - 'A' + 10;
+    }
+    if (character >= 'a' && character <= 'f')
+    {
+        return character - 'a' + 10;
+    }
+    return -1;
+}
+
+static void fromIntToHexChar(int i, char *c)
+{
+    sprintf(c, "%X", i);
+}
+
+static char *reverseString(char *str)
+{
+
+    if (!str || !*str)
+    {
         return str;
     }
 
@@ -94,55 +124,100 @@ static void reverseString(char *str){
     return str;
 }
 
-static void addHexStrings(char *first, char *second)
+static void addHexStrings(char *a, char *b, char *endResult)
 {
+    char *first;
+    char *second;
     // Before proceeding further, make sure length
     // of str2 is larger.
-    if (strlen(first) > strlen(second))
+    if (strlen(a) > strlen(b))
     {
-        return addHexStrings(second, first);
+        second = malloc(strlen(a));
+        strncpy(second, a, strlen(a));
+        first = malloc(strlen(b));
+        strncpy(first, b, strlen(b));
+    }
+    else
+    {
+        second = malloc(strlen(b));
+        strncpy(second, b, strlen(b));
+        first = malloc(strlen(a));
+        strncpy(first, a, strlen(a));
     }
 
-    // Take an empty string for storing result
-    char result[] = "";
-
-    // Calculate length of both string
     int n1 = strlen(first), n2 = strlen(second);
     int diff = n2 - n1;
+    int resultLen = 0;
+
+    // Take an empty string for storing result
+    char result[(n1 + n2)];
+    memset(result, 0, (n1 + n2));
 
     // Initially take carry zero
-    int carry = 0;
+    char *carry = malloc(1);
+    carry[0] = '0';
+
+    char *temp;
+
+    temp = malloc(1);
+    // ERror handling
 
     // Traverse from end of both strings
     for (int i = n1 - 1; i >= 0; i--)
     {
-        // Do school mathematics, compute sum of
-        // current digits and carry
-        int sum = ((first[i] - '0') +
-                   (second[i + diff] - '0') +
-                   carry);
-        strncat(result, (sum % 16), 1);
-        carry = sum / 16;
+        int sum = hexCharToInt(first[i]) + hexCharToInt(second[i + diff]) + hexCharToInt(carry[0]);
+        fromIntToHexChar((sum % 16), temp);
+        strncat(result, temp, 1);
+        fromIntToHexChar((sum / 16), carry);
+        resultLen++;
     }
 
     // Add remaining digits of str2[]
+    char *temp2;
+    temp2 = malloc(1);
+    //Error handling
+
     for (int i = n2 - n1 - 1; i >= 0; i--)
     {
-        int sum = ((second[i] - '0') + carry);
-        strncat(result, (sum % 16 + '0'), 2);
-        carry = sum / 16;
+        int sum = hexCharToInt(second[i]) + hexCharToInt(carry[0]);
+
+        fromIntToHexChar((sum % 16), temp2);
+
+        strncat(result, temp2, 1);
+        fromIntToHexChar((sum / 16), carry);
+        resultLen++;
     }
 
     // Add remaining carry
-    if (carry)
+    if (carry[0])
     {
-        strcat(result, (carry + '0'));
+        strcat(result, carry);
+        resultLen++;
     }
 
-    // reverse resultant string
-    return reverseString(result);
+    fprintf(stderr, "Resut: %s\n", reverseString(result));
+    if (realloc(endResult, resultLen) == NULL)
+    {
+        exitError("Realloc for endresult failed.", errno);
+    }
+    strncpy(endResult, reverseString(result), resultLen - 1);
 }
 
+static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest)
+{
+    fprintf(stderr, "Highest: %s\n", highest);
+    fprintf(stderr, "Higlow: %s\n", highlow);
+    fprintf(stderr, "Lowhigh: %s\n", lowhigh);
+    fprintf(stderr, "lowest: %s\n", lowest);
+    char *total = malloc(1);
+    addHexStrings(highest, highlow, total);
+    // char *total2 = malloc(1);
+    // addHexStrings(total, lowhigh, total2);
+
+    // char *total3 = malloc(1);
+    // addHexStrings(total2, lowest, total3);
+    // printf("Total: %s\n", total3);
+}
 
 static void appendZeroes(char *initial, int numberOfDigits)
 {
@@ -165,24 +240,10 @@ static void readFromChildren(void)
     FILE *lowHigh;
     FILE *lowest;
 
+    //Highest
     if ((highest = fdopen(pipefds[1][0], "r")) == NULL)
     {
         exitError("FILE 'highest' could not be opened.", errno);
-    }
-
-    if ((highLow = fdopen(pipefds[3][0], "r")) == NULL)
-    {
-        exitError("FILE 'highLow' could not be opened.", errno);
-    }
-
-    if ((lowHigh = fdopen(pipefds[5][0], "r")) == NULL)
-    {
-        exitError("FILE 'lowHigh' could not be opened.", errno);
-    }
-
-    if ((lowest = fdopen(pipefds[7][0], "r")) == NULL)
-    {
-        exitError("FILE 'lowest' could not be opened.", errno);
     }
 
     char *highestVal = NULL;
@@ -202,6 +263,12 @@ static void readFromChildren(void)
         exitError("'highest' could not be closed.", errno);
     }
 
+    // Highlow
+    if ((highLow = fdopen(pipefds[3][0], "r")) == NULL)
+    {
+        exitError("FILE 'highLow' could not be opened.", errno);
+    }
+
     char *highLowVal = NULL;
     size_t lenHighLow = 0;
     ssize_t linesizeHighLow;
@@ -219,6 +286,12 @@ static void readFromChildren(void)
         exitError("'highlow' could not be closed.", errno);
     }
 
+    //lowhigh
+    if ((lowHigh = fdopen(pipefds[5][0], "r")) == NULL)
+    {
+        exitError("FILE 'lowHigh' could not be opened.", errno);
+    }
+
     char *lowHighVal = NULL;
     size_t lenLowHigh = 0;
     ssize_t linesizeLowHigh;
@@ -234,6 +307,12 @@ static void readFromChildren(void)
     if (fclose(lowHigh) == EOF)
     {
         exitError("'lowhigh' could not be closed.", errno);
+    }
+
+    //Lowest
+    if ((lowest = fdopen(pipefds[7][0], "r")) == NULL)
+    {
+        exitError("FILE 'lowest' could not be opened.", errno);
     }
 
     char *lowestVal = NULL;
@@ -256,7 +335,6 @@ static void readFromChildren(void)
     appendZeroes(highestVal, strlen(argument1));
     appendZeroes(highLowVal, strlen(argument1) / 2);
     appendZeroes(lowHighVal, strlen(argument1) / 2);
-
     addPartSolutions(highestVal, highLowVal, lowHighVal, lowestVal);
 }
 
@@ -311,6 +389,15 @@ static void waitForChildren(void)
 
 static void writeToPipes(void)
 {
+    FILE *highest;
+    FILE *highLow;
+    FILE *lowHigh;
+    FILE *lowest;
+
+    // if ((highLow = fdopen(pipefds[3][0], "r")) == NULL)
+    // {
+    //     exitError("FILE 'highLow' could not be opened.", errno);
+    // }
     //Highest
     if (dprintf(pipefds[0][1], "%s\n", Ah) <= 0)
     {
