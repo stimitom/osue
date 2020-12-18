@@ -13,7 +13,7 @@ static char *addHexStrings(char *a, char *b);
 int main(int argc, char *argv[])
 {
     pgmName = argv[0];
-    printf("a%s\n", addHexStrings("FFFFFFFFF", "FFFFF"));
+    addHexStrings("FFFFFFFFF", "FFFFFFFFFFFF");
 }
 
 static int hexCharToInt(char character)
@@ -84,13 +84,15 @@ static char *addHexStrings(char *a, char *b)
 
     int n1 = strlen(first), n2 = strlen(second);
     int diff = n2 - n1;
+    int resultLen = 0; 
 
     // Take an empty string for storing result
     char result[(n1 + n2)];
     memset(result, 0, (n1 + n2));
 
     // Initially take carry zero
-    char carry = '0';
+    char *carry = malloc(1);
+    carry[0] = '0';
 
     char *temp;
 
@@ -100,11 +102,11 @@ static char *addHexStrings(char *a, char *b)
     // Traverse from end of both strings
     for (int i = n1 - 1; i >= 0; i--)
     {
-        int sum = hexCharToInt(first[i]) + hexCharToInt(second[i + diff]) + hexCharToInt(carry);
+        int sum = hexCharToInt(first[i]) + hexCharToInt(second[i + diff]) + hexCharToInt(carry[0]);
         fromIntToHexChar((sum % 16), temp);
         strncat(result, temp, 1);
-        fromIntToHexChar((sum / 16), &carry);
-        printf("temp: %s\n", carry);
+        fromIntToHexChar((sum / 16), carry);
+        resultLen++;
     }
 
     // Add remaining digits of str2[]
@@ -114,22 +116,23 @@ static char *addHexStrings(char *a, char *b)
 
     for (int i = n2 - n1 - 1; i >= 0; i--)
     {
-        int sum = hexCharToInt(second[i]) + hexCharToInt(carry);
+        int sum = hexCharToInt(second[i]) + hexCharToInt(carry[0]);
 
         fromIntToHexChar((sum % 16), temp2);
     
         strncat(result, temp2, 1);
-        fromIntToHexChar((sum / 16), &carry);
+        fromIntToHexChar((sum / 16), carry);
+        resultLen++;
     }
 
     // Add remaining carry
-    if (carry)
+    if (carry[0])
     {   
-        char arr[1];
-        arr[0] = carry;
-        strcat(result, arr);
+        strcat(result, carry);
+        resultLen++;
     }
-
+    printf("resultlen : %d\n", resultLen);
+    printf("Resut: %s\n", reverseString(result));
     // reverse resultant string
     return reverseString(result);
 }

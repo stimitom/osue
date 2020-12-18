@@ -143,9 +143,6 @@ static void addHexStrings(char *first, char *second)
     return reverseString(result);
 }
 
-static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest)
-{
-}
 
 static void appendZeroes(char *initial, int numberOfDigits)
 {
