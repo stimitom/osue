@@ -128,8 +128,7 @@ static void addHexStrings(char *a, char *b, char *endResult)
 {
     char *first;
     char *second;
-    // Before proceeding further, make sure length
-    // of str2 is larger.
+    // Length of second needs to be > length of first
     if (strlen(a) > strlen(b))
     {
         second = malloc(strlen(a));
@@ -195,28 +194,24 @@ static void addHexStrings(char *a, char *b, char *endResult)
         resultLen++;
     }
 
-    fprintf(stderr, "Resut: %s\n", reverseString(result));
     if (realloc(endResult, resultLen) == NULL)
     {
         exitError("Realloc for endresult failed.", errno);
     }
-    strncpy(endResult, reverseString(result), resultLen - 1);
+    strncpy(endResult, reverseString(result), resultLen);
 }
 
 static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest)
 {
-    fprintf(stderr, "Highest: %s\n", highest);
-    fprintf(stderr, "Higlow: %s\n", highlow);
-    fprintf(stderr, "Lowhigh: %s\n", lowhigh);
-    fprintf(stderr, "lowest: %s\n", lowest);
     char *total = malloc(1);
     addHexStrings(highest, highlow, total);
-    // char *total2 = malloc(1);
-    // addHexStrings(total, lowhigh, total2);
+    char *total2 = malloc(1);
+    addHexStrings(total, lowhigh, total2);
+    char *total3 = malloc(1);
+    addHexStrings(total2, lowest, total3);
 
-    // char *total3 = malloc(1);
-    // addHexStrings(total2, lowest, total3);
-    // printf("Total: %s\n", total3);
+    fprintf(stdout,"%s\n",total3);
+    exit(EXIT_SUCCESS);
 }
 
 static void appendZeroes(char *initial, int numberOfDigits)
@@ -394,65 +389,84 @@ static void writeToPipes(void)
     FILE *lowHigh;
     FILE *lowest;
 
-    // if ((highLow = fdopen(pipefds[3][0], "r")) == NULL)
-    // {
-    //     exitError("FILE 'highLow' could not be opened.", errno);
-    // }
     //Highest
-    if (dprintf(pipefds[0][1], "%s\n", Ah) <= 0)
+    if ((highest = fdopen(pipefds[0][1], "w")) == NULL)
     {
+        exitError("FILE 'highest' could not be opened for writing.", errno);
+    }
+
+    if(fprintf(highest,"%s\n",Ah) < 0){
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[0][1], "%s", Bh) <= 0)
-    {
+
+     if(fprintf(highest,"%s",Bh) < 0){
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
-    if (close(pipefds[0][1]) == -1)
+
+     if (fclose(highest) == EOF)
     {
-        exitError("Pipe end could not be closed.", 0);
+        exitError("Highest could not be closed.", errno);
     }
 
-    // Highlow
-    if (dprintf(pipefds[2][1], "%s\n", Ah) <= 0)
+
+    //Highlow
+    if ((highLow = fdopen(pipefds[2][1], "w")) == NULL)
     {
+        exitError("FILE 'highLow' could not be opened for writing.", errno);
+    }
+
+    if(fprintf(highLow,"%s\n",Ah) < 0){
         exitError("Could not write Ah to readPipe in Parent.", 0);
     }
-    if (dprintf(pipefds[2][1], "%s", Bl) <= 0)
-    {
-        exitError("Could not write Bl to readPipe in Parent.", 0);
-    }
-    if (close(pipefds[2][1]) == -1)
-    {
-        exitError("Pipe end could not be closed.", 0);
-    }
 
-    // LowHigh
-    if (dprintf(pipefds[4][1], "%s\n", Al) <= 0)
-    {
-        exitError("Could not write Al to readPipe in Parent.", 0);
-    }
-    if (dprintf(pipefds[4][1], "%s", Bh) <= 0)
-    {
+     if(fprintf(highLow,"%s",Bl) < 0){
         exitError("Could not write Bh to readPipe in Parent.", 0);
     }
-    if (close(pipefds[4][1]) == -1)
+
+     if (fclose(highLow) == EOF)
     {
-        exitError("Pipe end could not be closed.", 0);
+        exitError("highLow could not be closed.", errno);
     }
 
-    // Lowest
-    if (dprintf(pipefds[6][1], "%s\n", Al) <= 0)
+
+    //LowHigh
+    if ((lowHigh = fdopen(pipefds[4][1], "w")) == NULL)
     {
-        exitError("Could not write Al to readPipe in Parent.", 0);
+        exitError("FILE 'lowHigh' could not be opened for writing.", errno);
     }
-    if (dprintf(pipefds[6][1], "%s", Bl) <= 0)
+
+    if(fprintf(lowHigh,"%s\n",Al) < 0){
+        exitError("Could not write Ah to readPipe in Parent.", 0);
+    }
+
+     if(fprintf(lowHigh,"%s",Bh) < 0){
+        exitError("Could not write Bh to readPipe in Parent.", 0);
+    }
+
+     if (fclose(lowHigh) == EOF)
     {
-        exitError("Could not write Bl to readPipe in Parent.", 0);
+        exitError("lowHigh could not be closed.", errno);
     }
-    if (close(pipefds[6][1]) == -1)
+
+    //Lowest
+    if ((lowest = fdopen(pipefds[6][1], "w")) == NULL)
     {
-        exitError("Pipe end could not be closed.", 0);
+        exitError("FILE 'lowest' could not be opened for writing.", errno);
     }
+
+    if(fprintf(lowest,"%s\n",Al) < 0){
+        exitError("Could not write Ah to readPipe in Parent.", 0);
+    }
+
+     if(fprintf(lowest,"%s",Bl) < 0){
+        exitError("Could not write Bh to readPipe in Parent.", 0);
+    }
+
+     if (fclose(lowest) == EOF)
+    {
+        exitError("lowest could not be closed.", errno);
+    }
+
 }
 
 static void closeAllPipesExcept(int readPipeNumber, int writePipeNumber)

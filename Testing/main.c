@@ -8,12 +8,15 @@ char *pgmName;
 static int hexCharToInt(char character);
 static void fromIntToHexChar(int i, char *c);
 static char *reverseString(char *str);
-static char *addHexStrings(char *a, char *b);
+// static char *addHexStrings(char *a, char *b);
+static void addHexStrings(char *a, char *b, char *endResult);
 
 int main(int argc, char *argv[])
 {
     pgmName = argv[0];
-    addHexStrings("FFFFFFFFF", "FFFFFFFFFFFF");
+    char * total = malloc(1);
+    addHexStrings("FFFFFFFFF", "FFFFFFFFFFFF", total);
+    printf("%s\n", total);
 }
 
 static int hexCharToInt(char character)
@@ -63,28 +66,30 @@ static char *reverseString(char *str)
     return str;
 }
 
-static char *addHexStrings(char *a, char *b)
+static void addHexStrings(char *a, char *b, char *endResult)
 {
-   char *first; 
-   char *second;
+    char *first;
+    char *second;
     // Before proceeding further, make sure length
     // of str2 is larger.
     if (strlen(a) > strlen(b))
-    {   
-        second =  malloc(strlen(a));
+    {
+        second = malloc(strlen(a));
         strncpy(second, a, strlen(a));
-        first =  malloc(strlen(b));
+        first = malloc(strlen(b));
         strncpy(first, b, strlen(b));
-    }else{
-        second =  malloc(strlen(b));
+    }
+    else
+    {
+        second = malloc(strlen(b));
         strncpy(second, b, strlen(b));
-        first =  malloc(strlen(a));
+        first = malloc(strlen(a));
         strncpy(first, a, strlen(a));
     }
 
     int n1 = strlen(first), n2 = strlen(second);
     int diff = n2 - n1;
-    int resultLen = 0; 
+    int resultLen = 0;
 
     // Take an empty string for storing result
     char result[(n1 + n2)];
@@ -119,7 +124,7 @@ static char *addHexStrings(char *a, char *b)
         int sum = hexCharToInt(second[i]) + hexCharToInt(carry[0]);
 
         fromIntToHexChar((sum % 16), temp2);
-    
+
         strncat(result, temp2, 1);
         fromIntToHexChar((sum / 16), carry);
         resultLen++;
@@ -127,12 +132,91 @@ static char *addHexStrings(char *a, char *b)
 
     // Add remaining carry
     if (carry[0])
-    {   
+    {
         strcat(result, carry);
         resultLen++;
     }
-    printf("resultlen : %d\n", resultLen);
-    printf("Resut: %s\n", reverseString(result));
-    // reverse resultant string
-    return reverseString(result);
+
+    if (realloc(endResult, resultLen) == NULL)
+    {
+        // exitError("Realloc for endresult failed.", errno);
+        fprintf(stderr, "Failed realloc: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+    strncpy(endResult, reverseString(result), resultLen);
 }
+
+
+// static char *addHexStrings(char *a, char *b)
+// {
+//    char *first; 
+//    char *second;
+//     // Before proceeding further, make sure length
+//     // of str2 is larger.
+//     if (strlen(a) > strlen(b))
+//     {   
+//         second =  malloc(strlen(a));
+//         strncpy(second, a, strlen(a));
+//         first =  malloc(strlen(b));
+//         strncpy(first, b, strlen(b));
+//     }else{
+//         second =  malloc(strlen(b));
+//         strncpy(second, b, strlen(b));
+//         first =  malloc(strlen(a));
+//         strncpy(first, a, strlen(a));
+//     }
+
+//     int n1 = strlen(first), n2 = strlen(second);
+//     int diff = n2 - n1;
+//     int resultLen = 0; 
+
+//     // Take an empty string for storing result
+//     char result[(n1 + n2)];
+//     memset(result, 0, (n1 + n2));
+
+//     // Initially take carry zero
+//     char *carry = malloc(1);
+//     carry[0] = '0';
+
+//     char *temp;
+
+//     temp = malloc(1);
+//     // ERror handling
+
+//     // Traverse from end of both strings
+//     for (int i = n1 - 1; i >= 0; i--)
+//     {
+//         int sum = hexCharToInt(first[i]) + hexCharToInt(second[i + diff]) + hexCharToInt(carry[0]);
+//         fromIntToHexChar((sum % 16), temp);
+//         strncat(result, temp, 1);
+//         fromIntToHexChar((sum / 16), carry);
+//         resultLen++;
+//     }
+
+//     // Add remaining digits of str2[]
+//     char *temp2;
+//     temp2 = malloc(1);
+//     //Error handling
+
+//     for (int i = n2 - n1 - 1; i >= 0; i--)
+//     {
+//         int sum = hexCharToInt(second[i]) + hexCharToInt(carry[0]);
+
+//         fromIntToHexChar((sum % 16), temp2);
+    
+//         strncat(result, temp2, 1);
+//         fromIntToHexChar((sum / 16), carry);
+//         resultLen++;
+//     }
+
+//     // Add remaining carry
+//     if (carry[0])
+//     {   
+//         strcat(result, carry);
+//         resultLen++;
+//     }
+//     printf("resultlen : %d\n", resultLen);
+//     printf("Resut: %s\n", reverseString(result));
+//     // reverse resultant string
+//     return reverseString(result);
+// }
