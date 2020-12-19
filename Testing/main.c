@@ -4,30 +4,48 @@
 #include <errno.h>
 
 char *pgmName;
-char *total;
 static int hexCharToInt(char character);
 static void fromIntToHexChar(int i, char *c);
 static char *reverseString(char *str);
 // static char *addHexStrings(char *a, char *b);
-static void addHexStrings(char *a, char *b);
-// static void addHexStrings(char *a, char *b, char *endResult);
+// static void addHexStrings(char *a, char *b);
+static void addHexStrings(char *a, char *b, char **endResult);
 
+// static void test(char **x){
+//     realloc(*x, 2);
+//     char sd[2] = "ac";
+//     strncpy(*x, sd, 3); 
+// }
 
 int main(int argc, char *argv[])
 {
     pgmName = argv[0];
- 
-    if ((total = malloc(1)) == NULL)
-    {
-        fprintf(stderr, "Malloc falied\n");
-    }
-    addHexStrings("AFAFAF","AFAFA11984312983" );
-    printf("%s\n", total);
+    char *total;
+
+        if ((total = malloc(1)) == NULL)
+        {
+            fprintf(stderr, "Malloc falied\n");
+        }
+
+        addHexStrings("b","1", &total);
+        printf("total %s\n", total);
+
+       char *total2;
+        if ((total2 = malloc(1)) == NULL)
+        {
+            fprintf(stderr, "Malloc falied\n");
+        }
+
+        addHexStrings("1a4", total, &total2 );
+        printf("total2: %s\n", total2);
+
+    // char *some = malloc(3);
+    // test(&some);
+    // printf("%s\n", some);
 }
 
 static int hexCharToInt(char character)
 {
-
     if (character >= '0' && character <= '9')
     {
 
@@ -52,7 +70,6 @@ static void fromIntToHexChar(int i, char *c)
 
 static char *reverseString(char *str)
 {
-
     if (!str || !*str)
     {
         return str;
@@ -69,42 +86,37 @@ static char *reverseString(char *str)
         i--;
         j++;
     }
+    str[strlen(str)]= '\0';
     return str;
 }
 
-
-static void addHexStrings(char *a, char *b)
+static void addHexStrings(char *a, char *b, char **endResult)
 {
-    
-    if (strlen(a) > strlen(b)){
-        addHexStrings(b,a);
-        return;
+    char *first;
+    char *second;
+    if (strlen(a) > strlen(b))
+    {
+        second = malloc(strlen(a));
+        strncpy(second, a, strlen(a));
+        first = malloc(strlen(b));
+        strncpy(first, b, strlen(b));
     }
-    // {
-    //     second = malloc(strlen(a));
-    //     strncpy(second, a, strlen(a));
-    //     first = malloc(strlen(b));
-    //     strncpy(first, b, strlen(b));
-    // }
-    // else
-    // {
-    //     second = malloc(strlen(b));
-    //     second = strncpy(second, b, strlen(b));
-    //     first = malloc(strlen(a));
-    //     first = strncpy(first, a, strlen(a));
-    // }
-    char first[strlen(a)];
-    strncpy(first, a, strlen(a));
-    char second[strlen(b)];
-    strncpy(second, b, strlen(b));
+    else
+    {
+        second = malloc(strlen(b));
+        second = strncpy(second, b, strlen(b));
+        first = malloc(strlen(a));
+        first = strncpy(first, a, strlen(a));
+    }
 
     int n1 = strlen(first), n2 = strlen(second);
     int diff = n2 - n1;
     int resultLen = 0;
 
     // Take an empty string for storing result
-    char result[(n1 + n2)];
-    memset(result, 0, (n1 + n2 - 1));
+    char result[(n1 + n2 - 1)];
+    bzero(result, (n1 + n2 - 1));
+    result[n1+n2-2] = '\0';
 
     // Initially take carry zero
     // char *carry = malloc(1);
@@ -140,41 +152,51 @@ static void addHexStrings(char *a, char *b)
     // Add remaining carry
     if (carry[0] != '0')
     {
-        strcat(result, carry);
+        strncat(result, carry, 1);
         resultLen++;
     }
 
-    
-    if (realloc(total,resultLen) == NULL)
+    if ((realloc(*endResult, resultLen)) == NULL)
     {
         // exitError("Realloc for endresult failed.", errno);
         fprintf(stderr, "Failed realloc: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    strncpy(total, reverseString(result), resultLen);
+    free(first);
+    free(second);
+
+
+
+    strncpy(*endResult, reverseString(result), resultLen+1);
+
+    
 }
 
-
-
-// static void addHexStrings(char *a, char *b, char *endResult)
+// static void addHexStrings(char *a, char *b)
 // {
-//     char *first;
-//     char *second;
-//     if (strlen(a) > strlen(b))
-//     {
-//         second = malloc(strlen(a));
-//         strncpy(second, a, strlen(a));
-//         first = malloc(strlen(b));
-//         strncpy(first, b, strlen(b));
+
+//     if (strlen(a) > strlen(b)){
+//         addHexStrings(b,a);
+//         return;
 //     }
-//     else
-//     {
-//         second = malloc(strlen(b));
-//         second = strncpy(second, b, strlen(b));
-//         first = malloc(strlen(a));
-//         first = strncpy(first, a, strlen(a));
-//     }
+//     // {
+//     //     second = malloc(strlen(a));
+//     //     strncpy(second, a, strlen(a));
+//     //     first = malloc(strlen(b));
+//     //     strncpy(first, b, strlen(b));
+//     // }
+//     // else
+//     // {
+//     //     second = malloc(strlen(b));
+//     //     second = strncpy(second, b, strlen(b));
+//     //     first = malloc(strlen(a));
+//     //     first = strncpy(first, a, strlen(a));
+//     // }
+//     char first[strlen(a)];
+//     strncpy(first, a, strlen(a));
+//     char second[strlen(b)];
+//     strncpy(second, b, strlen(b));
 
 //     int n1 = strlen(first), n2 = strlen(second);
 //     int diff = n2 - n1;
@@ -222,17 +244,14 @@ static void addHexStrings(char *a, char *b)
 //         resultLen++;
 //     }
 
-//     if (realloc(endResult, resultLen - 1) == NULL)
+//     if (realloc(total,resultLen) == NULL)
 //     {
 //         // exitError("Realloc for endresult failed.", errno);
 //         fprintf(stderr, "Failed realloc: %s\n", strerror(errno));
 //         exit(EXIT_FAILURE);
 //     }
 
-//     strncpy(endResult, reverseString(result), resultLen);
-
-//     free(second);
-//     free(first);
+//     strncpy(total, reverseString(result), resultLen);
 // }
 
 // static char *addHexStrings(char *a, char *b)
