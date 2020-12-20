@@ -11,35 +11,33 @@
 char *pgmName;
 char *argument1;
 char *argument2;
-char *result;
-char *Ah;
-char *Al;
-char *Bh;
-char *Bl;
 pid_t pids[4];
 int pipefds[8][2];
+char *highestVal = NULL;
+char *highLowVal = NULL;
+char *lowHighVal = NULL;
+char *lowestVal = NULL;
 
 static void exitError(char *message, int errnum);
 static void readInput(void);
 static void cleanUp(void);
 static void argumentsAreValidHexa(void);
 static void multiplyAndWrite(void);
-static void splitArguments(int numberOfDigits);
 static void forkIntoChildProcesses(void);
 static void createPipes(void);
 static void closeUnneccasaryPipeEndsParent(void);
 static void redirectInAndOut(void);
 static void closeAllPipesExcept(int readPipeNumber, int writePipeNumber);
-static void writeToPipes(void);
+static void writeToPipes(char *Ah, char *Bh, char *Al, char *Bl);
 static void waitForChildren(void);
 static void executeChildProcess(void);
-static void readFromChildren(void);
-static void appendZeroes(char *initial, int numberOfDigits);
+static void readFromChildren(int numberOfDigits);
+static void appendZeroes(char **initial, int numberOfDigits);
 static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest);
 static int hexCharToInt(char character);
 static void fromIntToHexChar(int i, char *c);
 static char *reverseString(char *str);
-static void addHexStrings(char *a, char *b, char *endResult);
+static void addHexStrings(char *a, char *b, char **endResult);
 
 int main(int argc, char *argv[])
 {
@@ -54,7 +52,28 @@ int main(int argc, char *argv[])
         exit(EXIT_SUCCESS);
     }
 
-    splitArguments(numberOfDigits);
+    int halfNumberOfDigits = numberOfDigits / 2;
+
+    char Ah[halfNumberOfDigits];
+    char Al[halfNumberOfDigits];
+    char Bh[halfNumberOfDigits];
+    char Bl[halfNumberOfDigits];
+
+    for (int i = 0; i <= halfNumberOfDigits; i++)
+    {
+        Ah[i] = argument1[i];
+        Al[i] = argument1[i + halfNumberOfDigits];
+        Bh[i] = argument2[i];
+        Bl[i] = argument2[i + halfNumberOfDigits];
+
+        if (i == halfNumberOfDigits)
+        {
+            Ah[i] = '\0';
+            Al[i] = '\0';
+            Bh[i] = '\0';
+            Bl[i] = '\0';
+        }
+    }
 
     createPipes();
 
@@ -66,9 +85,9 @@ int main(int argc, char *argv[])
     {
         //Parent
         closeUnneccasaryPipeEndsParent();
-        writeToPipes();
+        writeToPipes(Ah, Bh, Al, Bl);
         waitForChildren();
-        readFromChildren();
+        readFromChildren(numberOfDigits);
     }
     else
     {
@@ -82,7 +101,6 @@ static int hexCharToInt(char character)
 
     if (character >= '0' && character <= '9')
     {
-
         return character - '0';
     }
     if (character >= 'A' && character <= 'F')
@@ -124,7 +142,7 @@ static char *reverseString(char *str)
     return str;
 }
 
-static void addHexStrings(char *a, char *b, char *endResult)
+static void addHexStrings(char *a, char *b, char **endResult)
 {
     char *first;
     char *second;
@@ -132,29 +150,29 @@ static void addHexStrings(char *a, char *b, char *endResult)
     // Length of second needs to be > length of first
     if (strlen(a) > strlen(b))
     {
-        if ((second = malloc(strlen(a))) == NULL)
+        if ((second = malloc(strlen(a) + 1)) == NULL)
         {
             exitError("Malloc for second failed.", errno);
         }
-        strncpy(second, a, strlen(a));
-        if ((first = malloc(strlen(b))) == NULL)
+        strncpy(second, a, strlen(a) + 1);
+        if ((first = malloc(strlen(b) + 1)) == NULL)
         {
             exitError("Malloc for first failed.", errno);
         }
-        strncpy(first, b, strlen(b));
+        strncpy(first, b, strlen(b) + 1);
     }
     else
     {
-        if ((second = malloc(strlen(b))) == NULL)
+        if ((second = malloc(strlen(b) + 1)) == NULL)
         {
             exitError("Malloc for second failed.", errno);
         }
-        strncpy(second, b, strlen(b));
-        if ((first = malloc(strlen(a))) == NULL)
+        strncpy(second, b, strlen(b) + 1);
+        if ((first = malloc(strlen(a) + 1)) == NULL)
         {
             exitError("Malloc for first failed.", errno);
         }
-        strncpy(first, a, strlen(a));
+        strncpy(first, a, strlen(a) + 1);
     }
 
     int n1 = strlen(first), n2 = strlen(second);
@@ -162,88 +180,105 @@ static void addHexStrings(char *a, char *b, char *endResult)
     int resultLen = 0;
 
     // Take an empty string for storing result
-    char result[(n1 + n2)];
-    memset(result, 0, (n1 + n2));
+    char current[(n1 + n2 - 1)];
+    bzero(current, (n1 + n2 - 2));
+    current[n1 + n2 - 2] = '\0';
 
     // Initially take carry zero
-    char carry[1];
+    char carry[2];
     carry[0] = '0';
+    carry[1] = '\0';
 
-    char temp[1];
+    char temp[2];
+    temp[0] = '0';
+    temp[1] = '\0';
 
     // Traverse from end of both strings
     for (int i = n1 - 1; i >= 0; i--)
     {
         int sum = hexCharToInt(first[i]) + hexCharToInt(second[i + diff]) + hexCharToInt(carry[0]);
-        fromIntToHexChar((sum % 16), temp);
-        strncat(result, temp, 1);
-        fromIntToHexChar((sum / 16), carry);
+        fromIntToHexChar((sum % 16), &temp[0]);
+        strncat(current, temp, 2);
+        fromIntToHexChar((sum / 16), &carry[0]);
         resultLen++;
     }
 
     // Add remaining digits of str2[]
-    char temp2[1];
+    char temp2[2];
+    temp2[0] = '0';
+    temp2[1] = '\0';
 
     for (int i = n2 - n1 - 1; i >= 0; i--)
     {
         int sum = hexCharToInt(second[i]) + hexCharToInt(carry[0]);
 
-        fromIntToHexChar((sum % 16), temp2);
+        fromIntToHexChar((sum % 16), &temp2[0]);
 
-        strncat(result, temp2, 1);
-        fromIntToHexChar((sum / 16), carry);
+        strncat(current, temp2, 2);
+        fromIntToHexChar((sum / 16), &carry[0]);
         resultLen++;
     }
 
     // Add remaining carry
     if (carry[0] != '0')
     {
-        strncat(result, carry, 1);
+        strncat(current, carry, 2);
         resultLen++;
     }
 
-    if (realloc(endResult, strlen(result)) == NULL)
+    void *newpointer;
+    if ((newpointer = realloc(*endResult, resultLen)))
+    {
+        *endResult = newpointer;
+    }
+    else
     {
         exitError("Realloc for endresult failed.", errno);
     }
 
-    strncpy(endResult, reverseString(result), resultLen);
-
     free(first);
     free(second);
+
+    strncpy(*endResult, reverseString(current), resultLen);
 }
 
 static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest)
 {
     char *total;
-    if ((total = malloc(0)) == NULL)
+    if ((total = malloc(1)) == NULL)
     {
         exitError("Malloc for total failed.", errno);
     }
-    addHexStrings(highest, highlow, total);
-    addHexStrings(total, lowhigh, total);
-    addHexStrings(total, lowest, total);
-
+    addHexStrings(highest, highlow, &total);
+    addHexStrings(total, lowhigh, &total);
+    addHexStrings(total, lowest, &total);
     fprintf(stdout, "%s\n", total);
     free(total);
+    cleanUp();
     exit(EXIT_SUCCESS);
 }
 
-static void appendZeroes(char *initial, int numberOfDigits)
+static void appendZeroes(char **initial, int numberOfDigits)
 {
-    int oldlength = strlen(initial);
-    if (realloc(initial, (oldlength + numberOfDigits)) == NULL)
+    int oldlength = strlen(*initial);
+    void *newpointer;
+    if ((newpointer = realloc(*initial, (oldlength + numberOfDigits + 1))))
+    {
+        *initial = newpointer;
+    }
+    else
     {
         exitError("Realloc for char 'initial' failed.", errno);
     }
 
     for (int i = 0; i < numberOfDigits; i++)
     {
-        initial[i + oldlength] = '0';
+        (*initial)[i + oldlength] = '0';
     }
+    (*initial)[oldlength + numberOfDigits] = '\0';
 }
 
-static void readFromChildren(void)
+static void readFromChildren(int numberOfDigits)
 {
     FILE *highest;
     FILE *highLow;
@@ -256,7 +291,6 @@ static void readFromChildren(void)
         exitError("FILE 'highest' could not be opened.", errno);
     }
 
-    char *highestVal = NULL;
     size_t lenHighest = 0;
     ssize_t linesizeHighest;
     while ((linesizeHighest = getline(&highestVal, &lenHighest, highest)) != -1)
@@ -279,7 +313,6 @@ static void readFromChildren(void)
         exitError("FILE 'highLow' could not be opened.", errno);
     }
 
-    char *highLowVal = NULL;
     size_t lenHighLow = 0;
     ssize_t linesizeHighLow;
     while ((linesizeHighLow = getline(&highLowVal, &lenHighLow, highLow)) != -1)
@@ -290,6 +323,7 @@ static void readFromChildren(void)
             --linesizeHighLow;
         }
     }
+
 
     if (fclose(highLow) == EOF)
     {
@@ -302,7 +336,6 @@ static void readFromChildren(void)
         exitError("FILE 'lowHigh' could not be opened.", errno);
     }
 
-    char *lowHighVal = NULL;
     size_t lenLowHigh = 0;
     ssize_t linesizeLowHigh;
     while ((linesizeLowHigh = getline(&lowHighVal, &lenLowHigh, lowHigh)) != -1)
@@ -311,7 +344,7 @@ static void readFromChildren(void)
         {
             lowHighVal[linesizeLowHigh - 1] = '\0';
             --linesizeLowHigh;
-        }
+        } 
     }
 
     if (fclose(lowHigh) == EOF)
@@ -325,7 +358,6 @@ static void readFromChildren(void)
         exitError("FILE 'lowest' could not be opened.", errno);
     }
 
-    char *lowestVal = NULL;
     size_t lenLowest = 0;
     ssize_t linesizeLowest;
     while ((linesizeLowest = getline(&lowestVal, &lenLowest, lowest)) != -1)
@@ -342,9 +374,9 @@ static void readFromChildren(void)
         exitError("'lowest' could not be closed.", errno);
     }
 
-    appendZeroes(highestVal, strlen(argument1));
-    appendZeroes(highLowVal, strlen(argument1) / 2);
-    appendZeroes(lowHighVal, strlen(argument1) / 2);
+    appendZeroes(&highestVal, numberOfDigits);
+    appendZeroes(&highLowVal, numberOfDigits / 2);
+    appendZeroes(&lowHighVal, numberOfDigits / 2);
     addPartSolutions(highestVal, highLowVal, lowHighVal, lowestVal);
 }
 
@@ -378,26 +410,30 @@ static void waitForChildren(void)
 
     if (!WIFEXITED(statuses[0]))
     {
-        exitError(" A Child process did not terminate properly. Status", WEXITSTATUS(statuses[0]));
+        fprintf(stdout, "A Child process did not terminate properly. Status %s\n", strerror(WEXITSTATUS(statuses[0])));
+        exit(EXIT_FAILURE);
     }
 
     if (!WIFEXITED(statuses[1]))
     {
-        exitError(" A Child process did not terminate properly. Status", WEXITSTATUS(statuses[1]));
+        fprintf(stdout, "A Child process did not terminate properly. Status %s\n", strerror(WEXITSTATUS(statuses[1])));
+        exit(EXIT_FAILURE);
     }
 
     if (!WIFEXITED(statuses[2]))
     {
-        exitError(" A Child process did not terminate properly. Status", WEXITSTATUS(statuses[2]));
+        fprintf(stdout, "A Child process did not terminate properly. Status %s\n", strerror(WEXITSTATUS(statuses[2])));
+        exit(EXIT_FAILURE);
     }
 
     if (!WIFEXITED(statuses[3]))
     {
-        exitError(" A Child process did not terminate properly. Status", WEXITSTATUS(statuses[3]));
+        fprintf(stdout, "A Child process did not terminate properly. Status %s\n", strerror(WEXITSTATUS(statuses[3])));
+        exit(EXIT_FAILURE);
     }
 }
 
-static void writeToPipes(void)
+static void writeToPipes(char *Ah, char *Bh, char *Al, char *Bl)
 {
     FILE *highest;
     FILE *highLow;
@@ -647,42 +683,6 @@ static void forkIntoChildProcesses(void)
     pids[3] = pidLowest;
 }
 
-static void splitArguments(int numberOfDigits)
-{
-    if ((Ah = malloc(numberOfDigits * sizeof(char))) == NULL)
-    {
-        exitError("Malloc for Ah failed", errno);
-    }
-
-    if ((Al = malloc(numberOfDigits * sizeof(char))) == NULL)
-    {
-        exitError("Malloc for Al failed", errno);
-    }
-
-    if ((Bh = malloc(numberOfDigits * sizeof(char))) == NULL)
-    {
-        exitError("Malloc for Bh failed", errno);
-    }
-
-    if ((Bl = malloc(numberOfDigits * sizeof(char))) == NULL)
-    {
-        exitError("Malloc for Bl failed", errno);
-    }
-
-    for (int i = 0; i < numberOfDigits / 2; i++)
-    {
-        Ah[i] = argument1[i];
-        Al[i] = argument1[i + (numberOfDigits / 2)];
-        Bh[i] = argument2[i];
-        Bl[i] = argument2[i + (numberOfDigits / 2)];
-    }
-
-    Ah[numberOfDigits / 2] = '\0';
-    Al[numberOfDigits / 2] = '\0';
-    Bh[numberOfDigits / 2] = '\0';
-    Bl[numberOfDigits / 2] = '\0';
-}
-
 static void multiplyAndWrite(void)
 {
     long int aHex;
@@ -710,24 +710,17 @@ static void multiplyAndWrite(void)
     }
 
     long int res = aHex * bHex;
-
-    if ((result = malloc(sizeof(char) * 2)) == NULL)
-    {
-        exitError("Malloc for result failed", errno);
-    }
-
-    fprintf(stdout, "%x", (int)res);
+    fprintf(stdout, "%x\n", (int)res);
 }
 
+char *buff = NULL;
 static void readInput(void)
 {
-    char *buff = NULL;
     size_t len = 0;
     ssize_t linesize;
     int arg1filled = 0;
     while ((linesize = getline(&buff, &len, stdin)) != -1)
     {
-
         if (!arg1filled)
         {
             if (buff[linesize - 1] == '\n')
@@ -735,22 +728,24 @@ static void readInput(void)
                 buff[linesize - 1] = '\0';
                 --linesize;
             }
-            if ((argument1 = malloc(linesize)) == NULL)
+            if ((argument1 = malloc(linesize + 1)) == NULL)
             {
                 exitError("Malloc for argument1 failed.", errno);
             }
-            strncpy(argument1, buff, linesize);
+            strncpy(argument1, buff, linesize + 1);
             arg1filled++;
         }
         else
         {
-            if ((argument2 = malloc(linesize)) == NULL)
+            if ((argument2 = malloc(linesize + 1)) == NULL)
             {
                 exitError("Malloc for argument2 failed.", errno);
             }
-            strncpy(argument2, buff, linesize);
+            strncpy(argument2, buff, linesize + 1);
         }
     }
+
+    free(buff);
 
     if (strlen(argument1) != strlen(argument2))
     {
@@ -782,6 +777,10 @@ static void argumentsAreValidHexa(void)
 
 static void cleanUp(void)
 {
+    free(highestVal);
+    free(highLowVal);
+    free(lowHighVal);
+    free(lowestVal);
     free(argument1);
     free(argument2);
 }
