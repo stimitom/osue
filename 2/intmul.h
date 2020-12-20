@@ -1,4 +1,3 @@
-#define MAXARGSIZE 400
 // Pipes ordering in pipefds : 
 //       from Highest to Lowest: 
                 // HighestRead :0 

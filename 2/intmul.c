@@ -227,7 +227,7 @@ static void addHexStrings(char *a, char *b, char **endResult)
     }
 
     void *newpointer;
-    if ((newpointer = realloc(*endResult, resultLen)))
+    if ((newpointer = realloc(*endResult, resultLen+1)))
     {
         *endResult = newpointer;
     }
@@ -239,7 +239,7 @@ static void addHexStrings(char *a, char *b, char **endResult)
     free(first);
     free(second);
 
-    strncpy(*endResult, reverseString(current), resultLen);
+    strncpy(*endResult, reverseString(current), resultLen+1);
 }
 
 static void addPartSolutions(char *highest, char *highlow, char *lowhigh, char *lowest)
