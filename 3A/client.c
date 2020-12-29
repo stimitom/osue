@@ -10,9 +10,8 @@
 char *pgmName;
 FILE *outfile;
 char *url;
-char *filePath;
 char *hostName;
-char *helpHostName;
+char *filePath;
 char *port;
 
 static void parseArguments(int argc, char *argv[]);
@@ -29,39 +28,67 @@ int main(int argc, char *argv[])
     }
     parseArguments(argc, argv);
 
-    // struct addrinfo hints, *ai;
-    // bzero(&hints, sizeof(hints));
-    // hints.ai_family = AF_UNSPEC;
-    // hints.ai_socktype = SOCK_STREAM;
+    struct addrinfo hints, *ai;
+    bzero(&hints, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
 
-    // int res = getaddrinfo(hostName, port, &hints, &ai);
-    // if (res != 0)
-    // {
-    //     exitError(gai_strerror(res), 0);
-    // }
+    int res = getaddrinfo(hostName, port, &hints, &ai);
+    if (res != 0)
+    {   
+        fprintf(stderr, "[%s]: %s\n", pgmName, gai_strerror(res));
+        exit(EXIT_FAILURE);
+    }
 
-    // int sockFd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-    // if (sockFd == -1)
-    // {
-    //     exitError("Socket could not be created.", errno);
-    // }
+    int sockFd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+    if (sockFd == -1)
+    {
+        exitError("Socket could not be created.", errno);
+    }
 
-    // if (connect(sockFd, ai->ai_addr, ai->ai_addrlen) == -1)
-    // {
-    //     exitError("Connect failed.", errno);
-    // }
+    if (connect(sockFd, ai->ai_addr, ai->ai_addrlen) == -1)
+    {
+        exitError("Connect failed.", errno);
+    }
 
-    // FILE *sockfile;
-    // if ((sockfile = fdopen(sockFd, "r+")) == NULL)
-    // {
-    //     exitError("Sockfile could not be opened.", errno);
-    // }
-    // printf("Pathfile: %s\n", filePath);
+    FILE *sockfile;
+    if ((sockfile = fdopen(sockFd, "r+")) == NULL)
+    {
+        exitError("Sockfile could not be opened.", errno);
+    }
+    
+    char *request; 
+    if((request = malloc(strlen(filePath) + strlen(hostName) + 100)) == NULL){
+        exitError("Malloc for request failed.", 0); 
+    }
 
-    // fputs("GET ",sockfile);
-    // fputs("GET / HTTP/1.1\r\nHost: ", sockfile);
-    // fputs(hostName, sockfile);
-    // fputs("\r\nConnection: close",sockfile);
+    bzero(request,strlen(filePath) + strlen(hostName) + 100);
+    sprintf(request,"GET /%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", filePath,hostName);
+    printf("%s", request);
+    if (fputs(request,sockfile) == EOF){
+        exitError("Request could not be written.", 0);
+    }
+    if(fflush(sockfile) != 0){
+        exitError("Sockfile could not be flushed.", errno);
+    }
+
+    char *buff = NULL;
+    size_t len = 0;
+    ssize_t linesize;
+    int checkedStatusLine = 0;
+    while ((linesize = getline(&buff, &len, sockfile)) != -1){
+        if(!checkedStatusLine){
+
+        }
+        fputs(buff, stdout);
+    }
+    free(buff);
+    freeaddrinfo(ai);
+    free(request);
+
+    if(fclose(sockfile) != 0){
+        exitError("Sockfile could not be closed.", errno);
+    }
 }
 
 static void parseArguments(int argc, char *argv[])
@@ -129,22 +156,26 @@ static void parseArguments(int argc, char *argv[])
         exitError("The specified URL does start with the required protocol 'http://' .", 0);
     }
 
-    filePath = strrchr(url, '/');
-    if (&filePath[0] == &url[6])
+    if ((filePath = malloc(strlen(url) - 6)) == NULL)
     {
-        exitError("The filepath does not specify a resource.", 0);
+        exitError("Malloc for filePath failed.", errno);
+    }
+    strcpy(filePath, &url[7]);
+
+    char *helpHostName;
+    if((helpHostName = malloc(strlen(url) - 6)) == NULL){
+        exitError("Malloc for helpHostName2 failed.", errno);
+    }
+    strcpy(helpHostName, filePath);
+    hostName = filePath;
+    strsep(&filePath, ";/?:@=&");
+    int indexOfSep = (&filePath[0] - &hostName[0]) -1;
+    
+    if(helpHostName[indexOfSep] != '/'){
+        exitError("The given URL is not correct.", 0);
     }
 
-    if ((helpHostName = malloc(strlen(url) + 1)) == NULL)
-    {
-        exitError("Malloc for helpHostName failed.", errno);
-    }
-    strcpy(helpHostName, url);
-    helpHostName += 7;
-    hostName = helpHostName;
-    strsep(&helpHostName, ";/?:@=&");
-    helpHostName -= 7;
-    helpHostName -= (strlen(hostName) + 1);
+    free(helpHostName);
 
     char *localFileName;
     if (d_count)
@@ -235,7 +266,8 @@ static void exitError(char *message, int errnum)
 }
 
 static void cleanUp(void)
-{
-    free(helpHostName);
+{   
+    filePath -= (strlen(hostName) + 1);
+    free(filePath);
     free(port);
 }
