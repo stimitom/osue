@@ -7,15 +7,21 @@
 char *pgmName;
 FILE *outfile;
 char *url;
+char *hostName;
+char *helpHostName;
 long int port = 80;
 
 static void parseArguments(int argc, char *argv[]);
 static void usage(void);
 static void exitError(char *message, int errnum);
+static void cleanUp(void);
 
 int main(int argc, char *argv[])
 {
     pgmName = argv[0];
+    if(atexit(cleanUp) != 0){
+        exitError("atexit failed.", 0);
+    }
     parseArguments(argc, argv);
 }
 
@@ -83,6 +89,21 @@ static void parseArguments(int argc, char *argv[])
         exitError("The filepath does not specify a resource.", 0);
     }
 
+    
+    if((helpHostName = malloc(strlen(url)+1)) == NULL){
+        exitError("Malloc for helpHostName failed.", errno);
+    }
+    strcpy(helpHostName,url);
+    helpHostName+=7;
+    hostName = helpHostName;
+    strsep(&helpHostName,";/?:@=&");
+    helpHostName-=7; 
+    helpHostName-=(strlen(hostName)+1);
+   
+    
+    printf("hostName: %s\n", hostName);
+    
+
     char *localFileName;
     if (d_count)
     {
@@ -135,11 +156,6 @@ static void parseArguments(int argc, char *argv[])
             }
         }
     }
-
-    fprintf(outfile,"URL: %s\n", url);
-    fprintf(outfile,"filePath: %s\n", filePath);
-    // fprintf(outfile,"outfile: %s\n", localFileName);
-    fprintf(outfile,"port: %ld\n", port);
 }
 
 static void usage(void)
@@ -154,7 +170,8 @@ static void usage(void)
  * @return void
  */
 static void exitError(char *message, int errnum)
-{
+{   
+    cleanUp();
     if (errnum != 0)
     {
         fprintf(stderr, "[%s]: %s: %s\n", pgmName, message, strerror(errnum));
@@ -164,4 +181,8 @@ static void exitError(char *message, int errnum)
         fprintf(stderr, "[%s]: %s \n", pgmName, message);
     }
     exit(EXIT_FAILURE);
+}
+
+static void cleanUp(void){
+    free(helpHostName);
 }
