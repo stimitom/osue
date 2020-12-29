@@ -15,6 +15,8 @@ char *filePath;
 char *port;
 
 static void parseArguments(int argc, char *argv[]);
+static void parseResponseHeader(char *buff);
+static void protocolError(void);
 static void usage(char *message);
 static void exitError(char *message, int errnum);
 static void cleanUp(void);
@@ -35,7 +37,7 @@ int main(int argc, char *argv[])
 
     int res = getaddrinfo(hostName, port, &hints, &ai);
     if (res != 0)
-    {   
+    {
         fprintf(stderr, "[%s]: %s\n", pgmName, gai_strerror(res));
         exit(EXIT_FAILURE);
     }
@@ -56,37 +58,59 @@ int main(int argc, char *argv[])
     {
         exitError("Sockfile could not be opened.", errno);
     }
-    
-    char *request; 
-    if((request = malloc(strlen(filePath) + strlen(hostName) + 100)) == NULL){
-        exitError("Malloc for request failed.", 0); 
+
+    char *request;
+    if ((request = malloc(strlen(filePath) + strlen(hostName) + 100)) == NULL)
+    {
+        exitError("Malloc for request failed.", 0);
     }
 
-    bzero(request,strlen(filePath) + strlen(hostName) + 100);
-    sprintf(request,"GET /%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", filePath,hostName);
-    printf("%s", request);
-    if (fputs(request,sockfile) == EOF){
+    bzero(request, strlen(filePath) + strlen(hostName) + 100);
+    sprintf(request, "GET /%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", filePath, hostName);
+    if (fputs(request, sockfile) == EOF)
+    {
         exitError("Request could not be written.", 0);
     }
-    if(fflush(sockfile) != 0){
+    if (fflush(sockfile) != 0)
+    {
         exitError("Sockfile could not be flushed.", errno);
     }
 
     char *buff = NULL;
     size_t len = 0;
     ssize_t linesize;
-    int checkedStatusLine = 0;
-    while ((linesize = getline(&buff, &len, sockfile)) != -1){
-        if(!checkedStatusLine){
 
+    int checkedStatusLine = 0;
+    int pastHeaders = 0;
+
+    while ((linesize = getline(&buff, &len, sockfile)) != -1)
+    {
+        if (!checkedStatusLine)
+        {
+            char *helpBuff;
+            if ((helpBuff = malloc(linesize + 1)) == NULL)
+            {
+                exitError("Malloc for helpBuff failed.", errno);
+            }
+            strcpy(helpBuff, buff);
+            parseResponseHeader(helpBuff);
+            free(helpBuff);
+            checkedStatusLine++;
         }
-        fputs(buff, stdout);
+        if (pastHeaders)
+        {
+            fputs(buff, outfile);
+        }
+        if(strcmp(buff,"\r\n") == 0){
+            pastHeaders++;
+        }
     }
     free(buff);
     freeaddrinfo(ai);
     free(request);
 
-    if(fclose(sockfile) != 0){
+    if (fclose(sockfile) != 0)
+    {
         exitError("Sockfile could not be closed.", errno);
     }
 }
@@ -104,7 +128,8 @@ static void parseArguments(int argc, char *argv[])
             {
                 usage("Option d and o cannot be used both.");
             }
-            if(d_count){
+            if (d_count)
+            {
                 usage("Option o provided more than once.");
             }
             d_arg = optarg;
@@ -116,7 +141,8 @@ static void parseArguments(int argc, char *argv[])
             {
                 usage("Option d and o cannot be used both.");
             }
-            if(o_count){
+            if (o_count)
+            {
                 usage("Option o provided more than once.");
             }
             o_arg = optarg;
@@ -163,15 +189,17 @@ static void parseArguments(int argc, char *argv[])
     strcpy(filePath, &url[7]);
 
     char *helpHostName;
-    if((helpHostName = malloc(strlen(url) - 6)) == NULL){
+    if ((helpHostName = malloc(strlen(url) - 6)) == NULL)
+    {
         exitError("Malloc for helpHostName2 failed.", errno);
     }
     strcpy(helpHostName, filePath);
     hostName = filePath;
     strsep(&filePath, ";/?:@=&");
-    int indexOfSep = (&filePath[0] - &hostName[0]) -1;
-    
-    if(helpHostName[indexOfSep] != '/'){
+    int indexOfSep = (&filePath[0] - &hostName[0]) - 1;
+
+    if (helpHostName[indexOfSep] != '/')
+    {
         exitError("The given URL is not correct.", 0);
     }
 
@@ -228,16 +256,56 @@ static void parseArguments(int argc, char *argv[])
                 usage("Port number not valid.");
             }
         }
-        if((port = malloc(strlen(p_arg)+1)) == NULL){
+        if ((port = malloc(strlen(p_arg) + 1)) == NULL)
+        {
             exitError("Malloc for port failed.", errno);
         }
-        strcpy(port,p_arg);  
-    }else{
-        if((port = malloc(3)) == NULL){
-            exitError("Malloc for port failed.", errno);
-        }
-        strcpy(port,"80");  
+        strcpy(port, p_arg);
     }
+    else
+    {
+        if ((port = malloc(3)) == NULL)
+        {
+            exitError("Malloc for port failed.", errno);
+        }
+        strcpy(port, "80");
+    }
+}
+
+static void parseResponseHeader(char *buff)
+{
+    char *token[3];
+    token[0] = strtok(buff, " ");
+    token[1] = strtok(NULL, " ");
+    token[2] = strtok(NULL, " ");
+
+    if (strcmp(token[0], "HTTP/1.1") != 0)
+    {
+        protocolError();
+    }
+
+    long int responseStatus;
+    char *endpointer;
+    responseStatus = strtol(token[1], &endpointer, 10);
+    if (endpointer != NULL)
+    {
+        if (*endpointer != '\0')
+        {
+            protocolError();
+        }
+    }
+
+    if (responseStatus != 200)
+    {
+        fprintf(stderr, "[%s]: Status %ld: %s \n", pgmName, responseStatus, token[2]);
+        exit(3);
+    }
+}
+
+static void protocolError(void)
+{
+    fprintf(stderr, "[%s]: Protocol error!\n", pgmName);
+    exit(2);
 }
 
 static void usage(char *message)
@@ -266,8 +334,12 @@ static void exitError(char *message, int errnum)
 }
 
 static void cleanUp(void)
-{   
+{
     filePath -= (strlen(hostName) + 1);
     free(filePath);
     free(port);
+    if (outfile != stdout)
+    {
+        fclose(outfile);
+    }
 }
