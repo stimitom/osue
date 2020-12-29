@@ -3,26 +3,65 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 char *pgmName;
 FILE *outfile;
 char *url;
+char *filePath;
 char *hostName;
 char *helpHostName;
-long int port = 80;
+char *port;
 
 static void parseArguments(int argc, char *argv[]);
-static void usage(void);
+static void usage(char *message);
 static void exitError(char *message, int errnum);
 static void cleanUp(void);
 
 int main(int argc, char *argv[])
 {
     pgmName = argv[0];
-    if(atexit(cleanUp) != 0){
+    if (atexit(cleanUp) != 0)
+    {
         exitError("atexit failed.", 0);
     }
     parseArguments(argc, argv);
+
+    // struct addrinfo hints, *ai;
+    // bzero(&hints, sizeof(hints));
+    // hints.ai_family = AF_UNSPEC;
+    // hints.ai_socktype = SOCK_STREAM;
+
+    // int res = getaddrinfo(hostName, port, &hints, &ai);
+    // if (res != 0)
+    // {
+    //     exitError(gai_strerror(res), 0);
+    // }
+
+    // int sockFd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+    // if (sockFd == -1)
+    // {
+    //     exitError("Socket could not be created.", errno);
+    // }
+
+    // if (connect(sockFd, ai->ai_addr, ai->ai_addrlen) == -1)
+    // {
+    //     exitError("Connect failed.", errno);
+    // }
+
+    // FILE *sockfile;
+    // if ((sockfile = fdopen(sockFd, "r+")) == NULL)
+    // {
+    //     exitError("Sockfile could not be opened.", errno);
+    // }
+    // printf("Pathfile: %s\n", filePath);
+
+    // fputs("GET ",sockfile);
+    // fputs("GET / HTTP/1.1\r\nHost: ", sockfile);
+    // fputs(hostName, sockfile);
+    // fputs("\r\nConnection: close",sockfile);
 }
 
 static void parseArguments(int argc, char *argv[])
@@ -34,18 +73,24 @@ static void parseArguments(int argc, char *argv[])
         switch (c)
         {
         case 'd':
-            if (o_count || d_count)
+            if (o_count)
             {
-                usage();
+                usage("Option d and o cannot be used both.");
+            }
+            if(d_count){
+                usage("Option o provided more than once.");
             }
             d_arg = optarg;
             d_count++;
             numberOfArgs += 2;
             break;
         case 'o':
-            if (d_count || o_count)
+            if (d_count)
             {
-                usage();
+                usage("Option d and o cannot be used both.");
+            }
+            if(o_count){
+                usage("Option o provided more than once.");
             }
             o_arg = optarg;
             o_count++;
@@ -54,14 +99,14 @@ static void parseArguments(int argc, char *argv[])
         case 'p':
             if (p_count)
             {
-                usage();
+                usage("Option p provided more than once.");
             }
             p_arg = optarg;
             p_count++;
             numberOfArgs += 2;
             break;
         case '?':
-            usage();
+            usage("Wrong option provided.");
             break;
         default:
             break;
@@ -70,7 +115,7 @@ static void parseArguments(int argc, char *argv[])
 
     if (numberOfArgs + 2 != argc)
     {
-        usage();
+        usage("Too many arguments provided.");
     }
     url = argv[optind];
     if (url[0] != 'h' ||
@@ -83,26 +128,23 @@ static void parseArguments(int argc, char *argv[])
     {
         exitError("The specified URL does start with the required protocol 'http://' .", 0);
     }
-    char *filePath = strrchr(url, '/');
+
+    filePath = strrchr(url, '/');
     if (&filePath[0] == &url[6])
     {
         exitError("The filepath does not specify a resource.", 0);
     }
 
-    
-    if((helpHostName = malloc(strlen(url)+1)) == NULL){
+    if ((helpHostName = malloc(strlen(url) + 1)) == NULL)
+    {
         exitError("Malloc for helpHostName failed.", errno);
     }
-    strcpy(helpHostName,url);
-    helpHostName+=7;
+    strcpy(helpHostName, url);
+    helpHostName += 7;
     hostName = helpHostName;
-    strsep(&helpHostName,";/?:@=&");
-    helpHostName-=7; 
-    helpHostName-=(strlen(hostName)+1);
-   
-    
-    printf("hostName: %s\n", hostName);
-    
+    strsep(&helpHostName, ";/?:@=&");
+    helpHostName -= 7;
+    helpHostName -= (strlen(hostName) + 1);
 
     char *localFileName;
     if (d_count)
@@ -140,27 +182,37 @@ static void parseArguments(int argc, char *argv[])
         {
             exitError("The output file could not be opened.", errno);
         }
-    }else{
+    }
+    else
+    {
         outfile = stdout;
     }
 
     if (p_count)
     {
-        char *endpointer;
-        port = strtol(p_arg, &endpointer, 10);
-        if (endpointer != NULL)
+        for (int i = 0; i < strlen(p_arg); i++)
         {
-            if (endpointer == p_arg)
+            if (p_arg[i] < '0' || p_arg[i] > '9')
             {
-                exitError("The given port number is not valid", 0);
+                usage("Port number not valid.");
             }
         }
+        if((port = malloc(strlen(p_arg)+1)) == NULL){
+            exitError("Malloc for port failed.", errno);
+        }
+        strcpy(port,p_arg);  
+    }else{
+        if((port = malloc(3)) == NULL){
+            exitError("Malloc for port failed.", errno);
+        }
+        strcpy(port,"80");  
     }
 }
 
-static void usage(void)
+static void usage(char *message)
 {
-    fprintf(stderr, "ERROR\nUsage: %s [-p PORT] [ -o FILE | -d DIR ] URL\n", pgmName);
+    fprintf(stderr, "[%s]: %s \n", pgmName, message);
+    fprintf(stderr, "Usage: %s [-p PORT] [ -o FILE | -d DIR ] URL\n", pgmName);
     exit(EXIT_FAILURE);
 }
 
@@ -170,8 +222,7 @@ static void usage(void)
  * @return void
  */
 static void exitError(char *message, int errnum)
-{   
-    cleanUp();
+{
     if (errnum != 0)
     {
         fprintf(stderr, "[%s]: %s: %s\n", pgmName, message, strerror(errnum));
@@ -183,6 +234,8 @@ static void exitError(char *message, int errnum)
     exit(EXIT_FAILURE);
 }
 
-static void cleanUp(void){
+static void cleanUp(void)
+{
     free(helpHostName);
+    free(port);
 }
