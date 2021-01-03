@@ -274,10 +274,10 @@ static void parseArguments(int argc, char *argv[])
 
 static void parseResponseHeader(char *buff)
 {
-    char *token[3];
+    char *token[2];
     token[0] = strtok(buff, " ");
     token[1] = strtok(NULL, " ");
-    token[2] = strtok(NULL, " ");
+    
 
     if (strcmp(token[0], "HTTP/1.1") != 0)
     {
@@ -296,8 +296,21 @@ static void parseResponseHeader(char *buff)
     }
 
     if (responseStatus != 200)
-    {
-        fprintf(stderr, "[%s]: Status %ld: %s \n", pgmName, responseStatus, token[2]);
+    {   
+        char *ptr;
+        char *statusMessage; 
+        if((statusMessage = malloc(100))== NULL){
+            exitError("Malloc for status message failed.", errno);
+        }
+        int size = 0; 
+        while ((ptr = strtok(NULL, " ")) != NULL){
+            if(size + strlen(ptr) < 99){
+                strcat(statusMessage, ptr);
+                size+=strlen(ptr);
+            }
+        }
+        fprintf(stderr, "[%s]: Status %ld: %s \n", pgmName, responseStatus, statusMessage);
+        free(statusMessage);
         exit(3);
     }
 }
@@ -310,7 +323,7 @@ static void protocolError(void)
 
 static void usage(char *message)
 {
-    fprintf(stderr, "[%s]: %s \n", pgmName, message);
+    fprintf(stderr, "[%s]: %s\n", pgmName, message);
     fprintf(stderr, "Usage: %s [-p PORT] [ -o FILE | -d DIR ] URL\n", pgmName);
     exit(EXIT_FAILURE);
 }
