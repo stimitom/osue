@@ -13,12 +13,14 @@
 char *pgmName;
 char *indexFilename;
 char *port;
+struct addrinfo *ai;
 char *docRootPath;
 char *requestedFilePath;
 FILE *sockfile;
 FILE *requestedFile;
 volatile sig_atomic_t quit = 0;
 volatile sig_atomic_t connOpen = 0;
+volatile sig_atomic_t requestedFileOpen = 0;
 
 static void parseArguments(int argc, char *argv[]);
 static void readRequest(void);
@@ -49,7 +51,7 @@ int main(int argc, char *argv[])
 
     parseArguments(argc, argv);
 
-    struct addrinfo hints, *ai;
+    struct addrinfo hints;
     bzero(&hints, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
@@ -66,6 +68,12 @@ int main(int argc, char *argv[])
     if (sockFd == -1)
     {
         exitError("Socket could not be created.", errno);
+    }
+
+    int optval = 1;
+    if (setsockopt(sockFd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1)
+    {
+        exitError("Sockoption could not be set.", errno);
     }
 
     if (bind(sockFd, ai->ai_addr, ai->ai_addrlen) == -1)
@@ -94,8 +102,9 @@ int main(int argc, char *argv[])
         connOpen = 1;
 
         readRequest();
-        closeConnection();
     }
+    closeConnection();
+
     exit(EXIT_SUCCESS);
 }
 
@@ -194,11 +203,7 @@ static void readRequest(void)
     {
         if (!checkedStatusLine)
         {
-            char *helpBuff;
-            if ((helpBuff = malloc(linesize + 1)) == NULL)
-            {
-                exitError("Malloc for helpBuff failed.", errno);
-            }
+            char helpBuff[linesize + 1];
             strcpy(helpBuff, buff);
             if (!handleRequestHeader(helpBuff))
             {
@@ -206,7 +211,7 @@ static void readRequest(void)
             }
             checkedStatusLine++;
         }
-        else
+        else if (strcmp(buff, "\r\n") == 0)
         {
             transmitRequestedFile();
         }
@@ -217,12 +222,13 @@ static void readRequest(void)
 
 static int handleRequestHeader(char *buff)
 {
+
     char *token[3];
     token[0] = strtok(buff, " ");
     token[1] = strtok(NULL, " ");
-    token[2] = strtok(NULL, " ");
+    token[2] = strtok(NULL, "\r");
 
-    if (strtok(NULL, " ") != NULL)
+    if (strtok(NULL, "\n") != NULL)
     {
         sendNegResponseHeader(400);
         return 0;
@@ -240,38 +246,33 @@ static int handleRequestHeader(char *buff)
         return 0;
     }
 
-    requestedFilePath = token[1];
+    if ((requestedFilePath = malloc(strlen(token[1]) + 1)) == NULL)
+    {
+        exitError("Malloc for requested file path failed.", errno);
+    }
+    strcpy(requestedFilePath, token[1]);
     return 1;
 }
 
 static void sendNegResponseHeader(int status)
 {
-    char *responseHeader;
+    char responseHeader[100];
     if (status == 400)
     {
-        if ((responseHeader = malloc(strlen("HTTP/1.1 400 Bad Request\r\n") + 18)) == NULL)
-        {
-            exitError("Malloc for responseHeader failed.", errno);
-        }
-        strcpy(responseHeader, "HTTP/1.1 400 Bad Request");
+        strcpy(responseHeader, "HTTP/1.1 400 Bad Request\r\n");
     }
     else if (status == 404)
     {
-        if ((responseHeader = malloc(strlen("HTTP/1.1 404 Not Found\r\n") + 18)) == NULL)
-        {
-            exitError("Malloc for responseHeader failed.", errno);
-        }
-        strcpy(responseHeader, "HTTP/1.1 404 Not Found");
+        strcpy(responseHeader, "HTTP/1.1 404 Not Found\r\n");
     }
     else if (status == 501)
     {
-        if ((responseHeader = malloc(strlen("HTTP/1.1 501 Not Implemented\r\n") + 18)) == NULL)
-        {
-            exitError("Malloc for responseHeader failed.", errno);
-        }
-        strcpy(responseHeader, "HTTP/1.1 501 Not Implemented");
+        strcpy(responseHeader, "HTTP/1.1 501 Not Implementedr\n");
     }
+
     strcat(responseHeader, "Connection: close\r\n");
+
+    fprintf(stderr,"%s", responseHeader);
 
     if (fputs(responseHeader, sockfile) == EOF)
     {
@@ -283,25 +284,20 @@ static void sendNegResponseHeader(int status)
         exitError("Sockfile could not be flushed.", errno);
     }
 
-    free(responseHeader);
-    closeConnection();
 }
 
 static void transmitRequestedFile(void)
 {
     char *completeFilePath;
-    if ((completeFilePath = malloc(strlen(requestedFilePath) + strlen(docRootPath) + 1)) == NULL)
+    if ((completeFilePath = malloc(strlen(requestedFilePath) + strlen(docRootPath) + strlen(indexFilename) + 1)) == NULL)
     {
         exitError("Malloc for completeFilePath failed.", errno);
     }
+    bzero(completeFilePath, strlen(requestedFilePath) + strlen(docRootPath) + 1);
     strcat(completeFilePath, docRootPath);
     strcat(completeFilePath, requestedFilePath);
     if (requestedFilePath[strlen(requestedFilePath) - 1] == '/')
     {
-        if (realloc(completeFilePath, strlen(completeFilePath) + strlen(indexFilename) + 1) == NULL)
-        {
-            exitError("Realloc for completeFilePath failed.", errno);
-        }
         strcat(completeFilePath, indexFilename);
     }
 
@@ -309,12 +305,14 @@ static void transmitRequestedFile(void)
     {
         sendNegResponseHeader(404);
     }
-
-    sendPosResponseHeader(completeFilePath);
+    else
+    {   
+        requestedFileOpen = 1;
+        sendPosResponseHeader(completeFilePath);
+        writeRequestedFileToConnection();
+    }
 
     free(completeFilePath);
-
-    writeRequestedFileToConnection();
 }
 
 static void sendPosResponseHeader(char *completeFilePath)
@@ -356,14 +354,19 @@ static void sendPosResponseHeader(char *completeFilePath)
     sprintf(responseHeader, "HTTP/1.1 200 OK\r\nDate: %s\r\nContent-Length: %s\r\nConnection: close\r\n\r\n", date, fileSize);
     free(fileSize);
 
+    fprintf(stderr, "%s", responseHeader);
+
     if (fputs(responseHeader, sockfile) == EOF)
     {
         exitError("Response Header could not be written.", 0);
     }
+
     if (fflush(sockfile) != 0)
     {
         exitError("Sockfile could not be flushed.", errno);
     }
+
+    free(responseHeader);
 }
 
 static void writeRequestedFileToConnection(void)
@@ -396,6 +399,14 @@ static void closeConnection(void)
         exitError("Sockfile could not be closed.", errno);
     }
     connOpen = 0;
+
+    if (requestedFileOpen)
+    {
+        if (fclose(requestedFile) == EOF)
+        {
+            exitError("Requested file could not be closed.", errno);
+        }
+    }
 }
 
 static void usage(char *message)
@@ -434,6 +445,8 @@ static void exitError(char *message, int errnum)
 
 static void cleanUp(void)
 {
+    free(requestedFilePath);
     free(indexFilename);
+    freeaddrinfo(ai);
     free(port);
 }
