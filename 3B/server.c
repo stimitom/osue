@@ -17,18 +17,18 @@ struct addrinfo *ai;
 char *docRootPath;
 char *requestedFilePath;
 FILE *sockfile;
-FILE *requestedFile;
+char negativeResponseHeader[100];
 volatile sig_atomic_t quit = 0;
 volatile sig_atomic_t connOpen = 0;
-volatile sig_atomic_t requestedFileOpen = 0;
 
 static void parseArguments(int argc, char *argv[]);
 static void readRequest(void);
 static int handleRequestHeader(char *buff);
-static void sendNegResponseHeader(int status);
+static void createNegResponseHeader(int status);
 static void transmitRequestedFile(void);
 static void sendPosResponseHeader(char *completeFilePath);
-static void writeRequestedFileToConnection(void);
+static void writeRequestedFileToConnection(FILE *requestedFile);
+static void sendNegResponseHeader(void);
 static void closeConnection(void);
 static void handleSignal(int signal);
 static void usage(char *message);
@@ -102,8 +102,8 @@ int main(int argc, char *argv[])
         connOpen = 1;
 
         readRequest();
+        closeConnection();
     }
-    closeConnection();
 
     exit(EXIT_SUCCESS);
 }
@@ -198,22 +198,27 @@ static void readRequest(void)
     size_t len = 0;
     ssize_t linesize;
     int checkedStatusLine = 0;
-
+    int requestHeaderOk = 0;
     while ((linesize = getline(&buff, &len, sockfile)) != -1)
     {
         if (!checkedStatusLine)
         {
             char helpBuff[linesize + 1];
             strcpy(helpBuff, buff);
-            if (!handleRequestHeader(helpBuff))
-            {
-                break;
-            }
+            requestHeaderOk = handleRequestHeader(helpBuff);
             checkedStatusLine++;
         }
         else if (strcmp(buff, "\r\n") == 0)
         {
-            transmitRequestedFile();
+            if (requestHeaderOk)
+            {
+                transmitRequestedFile();
+            }
+            else
+            {
+                sendNegResponseHeader();
+            }
+            break;
         }
     }
 
@@ -222,7 +227,6 @@ static void readRequest(void)
 
 static int handleRequestHeader(char *buff)
 {
-
     char *token[3];
     token[0] = strtok(buff, " ");
     token[1] = strtok(NULL, " ");
@@ -230,19 +234,19 @@ static int handleRequestHeader(char *buff)
 
     if (strtok(NULL, "\n") != NULL)
     {
-        sendNegResponseHeader(400);
+        createNegResponseHeader(400);
         return 0;
     }
 
     if (strcmp(token[0], "GET") != 0)
     {
-        sendNegResponseHeader(501);
+        createNegResponseHeader(501);
         return 0;
     }
 
     if (strcmp(token[2], "HTTP/1.1") != 0)
     {
-        sendNegResponseHeader(400);
+        createNegResponseHeader(400);
         return 0;
     }
 
@@ -254,35 +258,22 @@ static int handleRequestHeader(char *buff)
     return 1;
 }
 
-static void sendNegResponseHeader(int status)
+static void createNegResponseHeader(int status)
 {
-    char responseHeader[100];
     if (status == 400)
     {
-        strcpy(responseHeader, "HTTP/1.1 400 Bad Request\r\n");
+        strcpy(negativeResponseHeader, "HTTP/1.1 400 Bad Request\r\n");
     }
     else if (status == 404)
     {
-        strcpy(responseHeader, "HTTP/1.1 404 Not Found\r\n");
+        strcpy(negativeResponseHeader, "HTTP/1.1 404 Not Found\r\n");
     }
     else if (status == 501)
     {
-        strcpy(responseHeader, "HTTP/1.1 501 Not Implementedr\n");
+        strcpy(negativeResponseHeader, "HTTP/1.1 501 Not Implementedr\n");
     }
 
-    strcat(responseHeader, "Connection: close\r\n");
-
-    fprintf(stderr,"%s", responseHeader);
-
-    if (fputs(responseHeader, sockfile) == EOF)
-    {
-        exitError("Response header could not be written.", 0);
-    }
-
-    if (fflush(sockfile) != 0)
-    {
-        exitError("Sockfile could not be flushed.", errno);
-    }
+    strcat(negativeResponseHeader, "Connection: close\r\n");
 
 }
 
@@ -301,15 +292,20 @@ static void transmitRequestedFile(void)
         strcat(completeFilePath, indexFilename);
     }
 
+    FILE *requestedFile;
     if ((requestedFile = fopen(completeFilePath, "r")) == NULL)
     {
-        sendNegResponseHeader(404);
+        createNegResponseHeader(404);
+        sendNegResponseHeader();
     }
     else
-    {   
-        requestedFileOpen = 1;
+    {
         sendPosResponseHeader(completeFilePath);
-        writeRequestedFileToConnection();
+        writeRequestedFileToConnection(requestedFile);
+        if (fclose(requestedFile) == EOF)
+        {
+            exitError("Requested file could not be closed.", errno);
+        }
     }
 
     free(completeFilePath);
@@ -369,7 +365,7 @@ static void sendPosResponseHeader(char *completeFilePath)
     free(responseHeader);
 }
 
-static void writeRequestedFileToConnection(void)
+static void writeRequestedFileToConnection(FILE *requestedFile)
 {
     char *buff = NULL;
     size_t len = 0;
@@ -390,6 +386,19 @@ static void writeRequestedFileToConnection(void)
     free(buff);
 }
 
+static void sendNegResponseHeader(void)
+{
+    if (fputs(negativeResponseHeader, sockfile) == EOF)
+    {
+        exitError("Response header could not be written.", 0);
+    }
+
+    if (fflush(sockfile) != 0)
+    {
+        exitError("Sockfile could not be flushed.", errno);
+    }
+}
+
 // Utility functions
 
 static void closeConnection(void)
@@ -399,14 +408,13 @@ static void closeConnection(void)
         exitError("Sockfile could not be closed.", errno);
     }
     connOpen = 0;
-
-    if (requestedFileOpen)
-    {
-        if (fclose(requestedFile) == EOF)
-        {
-            exitError("Requested file could not be closed.", errno);
-        }
-    }
+    // if (requestedFileOpen)
+    // {
+    //     if (fclose(requestedFile) == EOF)
+    //     {
+    //         exitError("Requested file could not be closed.", errno);
+    //     }
+    // }
 }
 
 static void usage(char *message)
