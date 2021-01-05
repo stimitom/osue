@@ -26,7 +26,6 @@ char *indexFilename;
 char *port;
 struct addrinfo *ai;
 char *docRootPath;
-char *requestedFilePath;
 FILE *sockfile;
 char negativeResponseHeader[100];
 volatile sig_atomic_t quit = 0;
@@ -34,9 +33,9 @@ volatile sig_atomic_t connOpen = 0;
 
 static void parseArguments(int argc, char *argv[]);
 static void handleRequest(void);
-static int handleRequestHeader(char *requestHeader);
+static int handleRequestHeader(char *requestHeader, char **requestedFilePathAdr);
 static void createNegResponseHeader(int status);
-static void transmitRequestedFile(void);
+static void transmitRequestedFile( char *requestedFilePath);
 static void sendPosResponseHeader(char *completeFilePath);
 static void writeRequestedFileToConnection(FILE *requestedFile);
 static void sendNegResponseHeader(void);
@@ -243,20 +242,21 @@ static void handleRequest(void)
     ssize_t linesize;
     int checkedStatusLine = 0;
     int requestHeaderOk = 0;
+    char *requestedFilePath = NULL;
     while ((linesize = getline(&buff, &len, sockfile)) != -1)
     {
         if (!checkedStatusLine)
         {
             char helpBuff[linesize + 1];
             strcpy(helpBuff, buff);
-            requestHeaderOk = handleRequestHeader(helpBuff);
+            requestHeaderOk = handleRequestHeader(helpBuff, &requestedFilePath);
             checkedStatusLine++;
         }
         else if (strcmp(buff, "\r\n") == 0)
         {
             if (requestHeaderOk)
             {
-                transmitRequestedFile();
+                transmitRequestedFile(requestedFilePath);
             }
             else
             {
@@ -265,7 +265,7 @@ static void handleRequest(void)
             break;
         }
     }
-
+    free(requestedFilePath);
     free(buff);
 }
 
@@ -273,16 +273,17 @@ static void handleRequest(void)
  * handleRequestHeader
  * @brief A given requestHeader is analysed.
  * @param char *requestHeader - a copy of the request Header (not the reference to the original request Header!)
+ * @param char **requestedFilePathAddr - address of requestedFilePath
  * @details The request Header is split into three parts using strtok
  *  and references to each part are stored in the char -pointer array "token[3]".
  *  It is checked if the request header 
  *      contains just the required parts. Else a negative response header with status 400 is created.
  *      has "GET" as its first part. Else a negative response header with status 501 is created. 
  *      has "HTTP/1.1" as its second part. Else a negative response header with status 400 is created.
- * The filePath is taken as is and stored in a global variable.
+ * The filePath is taken as is and stored in the dereferenced requestedFilePathAdr (= requestedFilePath).
  * @return 1 if request Header Ok . 0 if erroneous.
  */
-static int handleRequestHeader(char *requestHeader)
+static int handleRequestHeader(char *requestHeader, char **requestedFilePathAdr)
 {
     char *token[3];
     token[0] = strtok(requestHeader, " ");
@@ -307,11 +308,11 @@ static int handleRequestHeader(char *requestHeader)
         return 0;
     }
 
-    if ((requestedFilePath = malloc(strlen(token[1]) + 1)) == NULL)
+    if ((*requestedFilePathAdr = malloc(strlen(token[1]) + 1)) == NULL)
     {
         exitError("Malloc for requested file path failed.", errno);
     }
-    strcpy(requestedFilePath, token[1]);
+    strcpy(*requestedFilePathAdr, token[1]);
     return 1;
 }
 
@@ -344,6 +345,7 @@ static void createNegResponseHeader(int status)
 /**
  * transmitRequestedFile
  * @brief The requested File is opened and if available written to the socket. Else a negative response is sent.
+ * @param char *requestedFilePath
  * @details The complete file path is created from the given requesteFile and the document root path. 
  * If the requested file path is a directory the index file name is appended to the complete file path.
  * The requested file is opened: 
@@ -352,7 +354,7 @@ static void createNegResponseHeader(int status)
  *          in writeRequestedFileToConnection() , then the transmitted file is closed again.
  * @return void
  */
-static void transmitRequestedFile(void)
+static void transmitRequestedFile(char *requestedFilePath)
 {
     char *completeFilePath;
     if ((completeFilePath = malloc(strlen(requestedFilePath) + strlen(docRootPath) + strlen(indexFilename) + 1)) == NULL)
@@ -570,7 +572,6 @@ static void exitError(char *message, int errnum)
  */
 static void cleanUp(void)
 {
-    free(requestedFilePath);
     free(indexFilename);
     freeaddrinfo(ai);
     free(port);

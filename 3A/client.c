@@ -280,6 +280,7 @@ static void parseArguments(int argc, char *argv[])
         {
             exitError("The output file could not be opened.", errno);
         }
+        free(localFileName);
     }
     else
     {
