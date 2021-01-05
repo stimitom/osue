@@ -1,3 +1,14 @@
+/**
+ * @file server.c
+ * @author Thomas Stimakovits <0155190@student.tuwien.ac.at>
+ * @date 04.01.2021
+ *
+ * @brief A partial implementation of an http-server.
+ * 
+ * @details This program answers to GET requests transmitted using the http-protocol.
+ * 
+ **/
+
 #include <string.h>
 #include <signal.h>
 #include <stdio.h>
@@ -22,8 +33,8 @@ volatile sig_atomic_t quit = 0;
 volatile sig_atomic_t connOpen = 0;
 
 static void parseArguments(int argc, char *argv[]);
-static void readRequest(void);
-static int handleRequestHeader(char *buff);
+static void handleRequest(void);
+static int handleRequestHeader(char *requestHeader);
 static void createNegResponseHeader(int status);
 static void transmitRequestedFile(void);
 static void sendPosResponseHeader(char *completeFilePath);
@@ -35,6 +46,18 @@ static void usage(char *message);
 static void exitError(char *message, int errnum);
 static void cleanUp(void);
 
+/**
+ * Main-function. Program entry point.
+ * @brief The socket for receiving http requests is created. The socket listens for incoming requests until a signal interrupts it.
+ * @details 
+ * The signal handling and exit functions are set.
+ * The argument parsing is delegated to parseArguments(). 
+ * The socket is setup and starts listening on the specified port. 
+ * As long as no signal (SIGINT, SIGTERM) interrupts, one incoming connection is accepted. 
+ * The reading of an request is delegated to handleRequest(). 
+ * After handling the request the connection is closed and a new connection can be accepted.
+ * @return EXIT_SUCCESS OR EXIT_FAILURE
+ */
 int main(int argc, char *argv[])
 {
     pgmName = argv[0];
@@ -101,13 +124,23 @@ int main(int argc, char *argv[])
 
         connOpen = 1;
 
-        readRequest();
+        handleRequest();
         closeConnection();
     }
 
     exit(EXIT_SUCCESS);
 }
 
+/**
+ * parseArguments
+ * @brief The input arguments are handled.
+ * @param int argc 
+ * @param char *argv[]
+ * @details It is checked if the possible options are used correctly and if the compulsory argument DOC_ROOT is provided.
+ * If option p is given, the port number is checked and set to the provided number else the port number is set to 8080.
+ * If option i is given, the name of index file is set to the provided string else the name is set to "index.html".
+ * @return void
+ */
 static void parseArguments(int argc, char *argv[])
 {
 
@@ -192,7 +225,18 @@ static void parseArguments(int argc, char *argv[])
     }
 }
 
-static void readRequest(void)
+/**
+ * handleRequest - core function
+ * @brief The incoming request-header and -body are read and an according response is sent.
+ * @details 
+ * It is checked wheter the incoming request header is properly formed in handleRequestHeader and the answer is stored in requestHeaderOk.
+ * After reading through the whole request (this happens when the buffer is equal to "\r\n") an 
+ * answer is sent. 
+ * If the requestHeader was properly formed transmitRequestedFile() is called to send the requested File.
+ * Else a negative resonse is sent in sendNegResponseHeader().
+ * @return void
+ */
+static void handleRequest(void)
 {
     char *buff = NULL;
     size_t len = 0;
@@ -225,10 +269,23 @@ static void readRequest(void)
     free(buff);
 }
 
-static int handleRequestHeader(char *buff)
+/**
+ * handleRequestHeader
+ * @brief A given requestHeader is analysed.
+ * @param char *requestHeader - a copy of the request Header (not the reference to the original request Header!)
+ * @details The request Header is split into three parts using strtok
+ *  and references to each part are stored in the char -pointer array "token[3]".
+ *  It is checked if the request header 
+ *      contains just the required parts. Else a negative response header with status 400 is created.
+ *      has "GET" as its first part. Else a negative response header with status 501 is created. 
+ *      has "HTTP/1.1" as its second part. Else a negative response header with status 400 is created.
+ * The filePath is taken as is and stored in a global variable.
+ * @return 1 if request Header Ok . 0 if erroneous.
+ */
+static int handleRequestHeader(char *requestHeader)
 {
     char *token[3];
-    token[0] = strtok(buff, " ");
+    token[0] = strtok(requestHeader, " ");
     token[1] = strtok(NULL, " ");
     token[2] = strtok(NULL, "\r");
 
@@ -258,6 +315,14 @@ static int handleRequestHeader(char *buff)
     return 1;
 }
 
+/**
+ * createNegResponseHeader
+ * @brief A negative Response Header is created and stored in a global variable according to a given status.
+ * @param int *status - the error status
+ * @details A negative Response Header is created and stored in a global variable according to a given status. 
+ * The Connection field is added with the value 'close' to the negative reponse.
+ * @return void
+ */
 static void createNegResponseHeader(int status)
 {
     if (status == 400)
@@ -274,9 +339,19 @@ static void createNegResponseHeader(int status)
     }
 
     strcat(negativeResponseHeader, "Connection: close\r\n");
-
 }
 
+/**
+ * transmitRequestedFile
+ * @brief The requested File is opened and if available written to the socket. Else a negative response is sent.
+ * @details The complete file path is created from the given requesteFile and the document root path. 
+ * If the requested file path is a directory the index file name is appended to the complete file path.
+ * The requested file is opened: 
+ *      if it fails (this means the file is not available or existing) a negative response with status 404 is sent.
+ *      if it succeeds a positive response header is sent. After that the requested file's content is sent 
+ *          in writeRequestedFileToConnection() , then the transmitted file is closed again.
+ * @return void
+ */
 static void transmitRequestedFile(void)
 {
     char *completeFilePath;
@@ -311,6 +386,36 @@ static void transmitRequestedFile(void)
     free(completeFilePath);
 }
 
+/**
+ * sendNegativeResponseHeader
+ * @brief The globally stored negative reponse is sent.
+ * @details The negative response is written and flushed.
+ * @return void
+ */
+static void sendNegResponseHeader(void)
+{
+    if (fputs(negativeResponseHeader, sockfile) == EOF)
+    {
+        exitError("Response header could not be written.", 0);
+    }
+
+    fprintf(stderr, "%s\n", negativeResponseHeader);
+
+    if (fflush(sockfile) != 0)
+    {
+        exitError("Sockfile could not be flushed.", errno);
+    }
+}
+
+/**
+ * sendPosResponseHeader
+ * @brief A positive response Header is created and sent.
+ * @param char *completeFilePath - path to the file that is to be transmitted.
+ * @details Using strftime a formatted date-time as secified in RFC 822 is created.
+ * Using stat the filesize of the file to be transmitted is found.
+ * A positive Response header is created written to the connection and flushed.
+ * @return void
+ */
 static void sendPosResponseHeader(char *completeFilePath)
 {
     char date[50];
@@ -365,6 +470,13 @@ static void sendPosResponseHeader(char *completeFilePath)
     free(responseHeader);
 }
 
+/**
+ * writeRequestedFileToConnection
+ * @brief A given File is read and written to the connection line by line.
+ * @param FILE *requestedFile
+ * @details The file is written to the connection and flushed.
+ * @return void
+ */
 static void writeRequestedFileToConnection(FILE *requestedFile)
 {
     char *buff = NULL;
@@ -386,21 +498,13 @@ static void writeRequestedFileToConnection(FILE *requestedFile)
     free(buff);
 }
 
-static void sendNegResponseHeader(void)
-{
-    if (fputs(negativeResponseHeader, sockfile) == EOF)
-    {
-        exitError("Response header could not be written.", 0);
-    }
-
-    if (fflush(sockfile) != 0)
-    {
-        exitError("Sockfile could not be flushed.", errno);
-    }
-}
-
 // Utility functions
 
+/**
+ * closeConnection
+ * @brief Closes the connection and sets the volatile connOpen to 0.
+ * @return void
+ */
 static void closeConnection(void)
 {
     if (fclose(sockfile) == EOF)
@@ -408,15 +512,14 @@ static void closeConnection(void)
         exitError("Sockfile could not be closed.", errno);
     }
     connOpen = 0;
-    // if (requestedFileOpen)
-    // {
-    //     if (fclose(requestedFile) == EOF)
-    //     {
-    //         exitError("Requested file could not be closed.", errno);
-    //     }
-    // }
 }
 
+/**
+ * usage
+ * @brief Prints the given error message and the usage message formatted to stderr. Exits with EXIT FAILURE.
+ * @param char *message - the error message
+ * @return void
+ */
 static void usage(char *message)
 {
     fprintf(stderr, "[%s]: %s\n", pgmName, message);
@@ -424,6 +527,13 @@ static void usage(char *message)
     exit(EXIT_FAILURE);
 }
 
+/**
+ * handleSignal
+ * @brief The signal handler.
+ * @param int signal
+ * @details If a connection is open the quit flag is set (the request will still be orderly answered), else the programm exits immediately.
+ * @return void
+ */
 static void handleSignal(int signal)
 {
     if (!connOpen)
@@ -435,7 +545,9 @@ static void handleSignal(int signal)
 
 /**
  * exitError
- * @brief Custom exit Function.
+ * @brief Custom Exit Function to print formatted error message and exit.
+ * @param char *message - the error message
+ * @param int errnumm - for using the errno in the error message output. 0 if errno description is not needed.
  * @return void
  */
 static void exitError(char *message, int errnum)
@@ -451,6 +563,11 @@ static void exitError(char *message, int errnum)
     exit(EXIT_FAILURE);
 }
 
+/**
+ * cleanUp
+ * @brief frees allocated memory areas.
+ * @return void
+ */
 static void cleanUp(void)
 {
     free(requestedFilePath);

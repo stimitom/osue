@@ -1,4 +1,0 @@
-./client -d ~/uni/osue/osue/3A http://google.com/something.html
-
-./client  -p 65 -o outfile.txt  http://http://neverssl.com/ 
-./client  -o outfile.txt  http://neverssl.com/ 

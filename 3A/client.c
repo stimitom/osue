@@ -1,3 +1,13 @@
+/**
+ * @file client.c
+ * @author Thomas Stimakovits <0155190@student.tuwien.ac.at>
+ * @date 30.12.2020
+ *
+ * @brief A partial implementation of an http client.
+ * 
+ * @details This program can perform GET requests to an Http Server.
+ **/
+
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -15,12 +25,25 @@ char *filePath;
 char *port;
 
 static void parseArguments(int argc, char *argv[]);
-static void parseResponseHeader(char *buff);
+static void parseResponseHeader(char *responseHeader);
 static void protocolError(void);
 static void usage(char *message);
 static void exitError(char *message, int errnum);
 static void cleanUp(void);
 
+/**
+ * Main-function. Program entry point.
+ * @brief The socket for sending http requests is created. A request is sent and the response is read.
+ * @details 
+ * The exit function is set.
+ * The argument parsing is delegated to parseArguments(). 
+ * The socket is setup with the given port. 
+ * After the connection is established the sockfile is opened. 
+ * A GET-request is created and written to the connection. 
+ * After sending the request the response is read and written to the indicated outfile (or stdout).
+ * Open buffers are freed and the connection is closed.
+ * @return EXIT_SUCCESS OR EXIT_FAILURE
+ */
 int main(int argc, char *argv[])
 {
     pgmName = argv[0];
@@ -101,7 +124,8 @@ int main(int argc, char *argv[])
         {
             fputs(buff, outfile);
         }
-        if(strcmp(buff,"\r\n") == 0){
+        if (strcmp(buff, "\r\n") == 0)
+        {
             pastHeaders++;
         }
     }
@@ -114,7 +138,19 @@ int main(int argc, char *argv[])
         exitError("Sockfile could not be closed.", errno);
     }
 }
-
+/**
+ * parseArguments
+ * @brief The input arguments are handled.
+ * @param int argc 
+ * @param char *argv[]
+ * @details It is checked if the possible options are used correctly and if the compulsory argument URL is provided.
+ * If option d is given, the outfile is set to the given directory using the specified indexFilename.
+ * If option o is given, the name of outfile is set to the provided string else the name is set to "index.html".
+ * If neither d or o are provided the stdout is used as the outfile.
+ * If option p is given, the port number is checked and set to the provided number else the port number is set to 80.
+ * The URL is checked if it starts with "http://".
+ * @return void
+ */
 static void parseArguments(int argc, char *argv[])
 {
     char *d_arg = NULL, *o_arg = NULL, *p_arg = NULL;
@@ -130,7 +166,7 @@ static void parseArguments(int argc, char *argv[])
             }
             if (d_count)
             {
-                usage("Option o provided more than once.");
+                usage("Option d provided more than once.");
             }
             d_arg = optarg;
             d_count++;
@@ -168,7 +204,7 @@ static void parseArguments(int argc, char *argv[])
 
     if (numberOfArgs + 2 != argc)
     {
-        usage("Too many arguments provided.");
+        usage("Wrong amount of arguments provided.");
     }
     url = argv[optind];
     if (url[0] != 'h' ||
@@ -214,17 +250,20 @@ static void parseArguments(int argc, char *argv[])
             {
                 exitError("Malloc for localfilename failed.", errno);
             }
+            bzero(localFileName, sizeof(localFileName));
             strcat(localFileName, d_arg);
             strcat(localFileName, "/index.html");
         }
         else
         {
-            if ((localFileName = malloc(strlen(d_arg) + strlen(filePath) + 1)) == NULL)
+            char *fName = strrchr(filePath, '/');
+            if ((localFileName = malloc(strlen(d_arg) + strlen(fName) + 1)) == NULL)
             {
                 exitError("Malloc for localfilename failed.", errno);
             }
+            bzero(localFileName, sizeof(localFileName));
             strcat(localFileName, d_arg);
-            strcat(localFileName, filePath);
+            strcat(localFileName, fName);
         }
     }
     else if (o_count)
@@ -272,12 +311,23 @@ static void parseArguments(int argc, char *argv[])
     }
 }
 
-static void parseResponseHeader(char *buff)
+/**
+ * parseResponseHeader
+ * @brief A given responseHeader is analysed.
+ * @param char *responseHeader - a copy of the response Header (not the reference to the original response Header!)
+ * @details The response Header is split into two parts using strtok
+ *  and references to each part are stored in the char-pointer array "token[2]".
+ *  It is checked if the response header 
+ *      has "HTTP/1.1" as its first part. Else a protocol error is written to stderr. 
+ *      has a readable response status as its second part. Else a protocol error is written to stderr.
+ *      has 200 as response status. Else The negative response status is written to stderr and the programm exits with error code 3. 
+ * @return void
+ */
+static void parseResponseHeader(char *responseHeader)
 {
     char *token[2];
-    token[0] = strtok(buff, " ");
+    token[0] = strtok(responseHeader, " ");
     token[1] = strtok(NULL, " ");
-    
 
     if (strcmp(token[0], "HTTP/1.1") != 0)
     {
@@ -296,17 +346,20 @@ static void parseResponseHeader(char *buff)
     }
 
     if (responseStatus != 200)
-    {   
+    {
         char *ptr;
-        char *statusMessage; 
-        if((statusMessage = malloc(100))== NULL){
+        char *statusMessage;
+        if ((statusMessage = malloc(100)) == NULL)
+        {
             exitError("Malloc for status message failed.", errno);
         }
-        int size = 0; 
-        while ((ptr = strtok(NULL, " ")) != NULL){
-            if(size + strlen(ptr) < 99){
+        int size = 0;
+        while ((ptr = strtok(NULL, " ")) != NULL)
+        {
+            if (size + strlen(ptr) < 99)
+            {
                 strcat(statusMessage, ptr);
-                size+=strlen(ptr);
+                size += strlen(ptr);
             }
         }
         fprintf(stderr, "[%s]: Status %ld: %s \n", pgmName, responseStatus, statusMessage);
@@ -315,12 +368,25 @@ static void parseResponseHeader(char *buff)
     }
 }
 
+/**
+ * protocolError
+ * @brief Prints a formatted protocol error message to stderr and exits with error code 2.
+ * @return void
+ */
 static void protocolError(void)
 {
     fprintf(stderr, "[%s]: Protocol error!\n", pgmName);
     exit(2);
 }
 
+// Utility functions
+
+/**
+ * usage
+ * @brief Prints the given error message and the usage message formatted to stderr. Exits with EXIT FAILURE.
+ * @param char *message - the error message
+ * @return void
+ */
 static void usage(char *message)
 {
     fprintf(stderr, "[%s]: %s\n", pgmName, message);
@@ -330,7 +396,9 @@ static void usage(char *message)
 
 /**
  * exitError
- * @brief Custom exit Function.
+ * @brief Custom Exit Function to print formatted error message and exit.
+ * @param char *message - the error message
+ * @param int errnumm - for using the errno in the error message output. 0 if errno description is not needed.
  * @return void
  */
 static void exitError(char *message, int errnum)
@@ -346,6 +414,11 @@ static void exitError(char *message, int errnum)
     exit(EXIT_FAILURE);
 }
 
+/**
+ * cleanUp
+ * @brief frees allocated memory areas amd closes the outfile.
+ * @return void
+ */
 static void cleanUp(void)
 {
     filePath -= (strlen(hostName) + 1);
