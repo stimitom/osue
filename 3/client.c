@@ -24,6 +24,9 @@ char *hostName;
 char *filePath;
 char *port;
 
+volatile int filePathSet = 0; 
+volatile int portSet = 0; 
+
 static void parseArguments(int argc, char *argv[]);
 static void parseResponseHeader(char *responseHeader);
 static void protocolError(void);
@@ -223,6 +226,7 @@ static void parseArguments(int argc, char *argv[])
         exitError("Malloc for filePath failed.", errno);
     }
     strcpy(filePath, &url[7]);
+    filePathSet = 1;
 
     char *helpHostName;
     if ((helpHostName = malloc(strlen(url) - 6)) == NULL)
@@ -310,6 +314,7 @@ static void parseArguments(int argc, char *argv[])
         }
         strcpy(port, "80");
     }
+    portSet = 1;
 }
 
 /**
@@ -417,15 +422,21 @@ static void exitError(char *message, int errnum)
 
 /**
  * cleanUp
- * @brief frees allocated memory areas amd closes the outfile.
+ * @brief frees allocated memory areas and closes the outfile.
  * @return void
  */
 static void cleanUp(void)
 {
-    filePath -= (strlen(hostName) + 1);
-    free(filePath);
-    free(port);
-    if (outfile != stdout)
+    if (filePathSet)
+    {
+        filePath -= (strlen(hostName) + 1);
+        free(filePath);
+    }
+    if (portSet)
+    {
+        free(port);
+    }
+    if (outfile != stdout && outfile != NULL)
     {
         fclose(outfile);
     }
