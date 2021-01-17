@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 
     struct addrinfo hints, *ai;
     bzero(&hints, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
     int res = getaddrinfo(hostName, port, &hints, &ai);
