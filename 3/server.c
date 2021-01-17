@@ -142,7 +142,6 @@ int main(int argc, char *argv[])
  */
 static void parseArguments(int argc, char *argv[])
 {
-
     int c, p_count = 0, i_count = 0, numberOfArgs = 0;
     char *p_arg = NULL, *i_arg = NULL;
     while ((c = getopt(argc, argv, "p:i:")) != -1)

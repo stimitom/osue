@@ -236,11 +236,17 @@ static void parseArguments(int argc, char *argv[])
     strcpy(helpHostName, filePath);
     hostName = filePath;
     strsep(&filePath, ";/?:@=&");
+    
+    if (filePath == NULL)
+    {   
+       exitError("The given URL is malformed.", 0); 
+    }
+    
     int indexOfSep = (&filePath[0] - &hostName[0]) - 1;
-
+    
     if (helpHostName[indexOfSep] != '/')
     {
-        exitError("The given URL is not correct.", 0);
+        exitError("The given URL is malformed.", 0);
     }
 
     free(helpHostName);
@@ -359,13 +365,15 @@ static void parseResponseHeader(char *responseHeader)
         {
             exitError("Malloc for status message failed.", errno);
         }
+        bzero(statusMessage,100);
         int size = 0;
         while ((ptr = strtok(NULL, " ")) != NULL)
         {
-            if (size + strlen(ptr) < 99)
+            if (size + strlen(ptr) < 98)
             {
                 strcat(statusMessage, ptr);
-                size += strlen(ptr);
+                strcat(statusMessage, " ");
+                size += strlen(ptr) +1;
             }
         }
         fprintf(stderr, "[%s]: Status %ld: %s \n", pgmName, responseStatus, statusMessage);
@@ -427,7 +435,7 @@ static void exitError(char *message, int errnum)
  */
 static void cleanUp(void)
 {
-    if (filePathSet)
+    if (filePathSet && filePath != NULL)
     {
         filePath -= (strlen(hostName) + 1);
         free(filePath);
