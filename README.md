@@ -9,4 +9,4 @@ A repository for c university projects.
 
 2 is a program that multiplies two given hex numbers of equal even size using subprocesses and pipes for the inter process communication.
 
-3 is a basic implementation of parts of the http protocol. (WIP)
+3 is a basic (not feature-complete) implementation of an http-server and an http-client.
